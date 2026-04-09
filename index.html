@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nostr Business Card</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 500px;
+            width: 100%;
+        }
+
+        .search-box {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+        }
+
+        .search-box h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            padding: 12px 25px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #5568d3;
+        }
+
+        .business-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+            display: none;
+        }
+
+        .business-card.active {
+            display: block;
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px 20px;
+            text-align: center;
+            color: white;
+        }
+
+        .avatar {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            margin: 0 auto 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            border: 3px solid white;
+            overflow: hidden;
+        }
+
+        .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .card-header h2 {
+            font-size: 24px;
+            margin-bottom: 5px;
+            word-break: break-word;
+        }
+
+        .card-header p {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .card-body {
+            padding: 30px;
+        }
+
+        .info-row {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .info-label {
+            font-size: 12px;
+            color: #999;
+            text-transform: uppercase;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            font-size: 14px;
+            color: #333;
+            word-break: break-all;
+        }
+
+        .info-value a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .info-value a:hover {
+            text-decoration: underline;
+        }
+
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .error.active {
+            display: block;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+            display: none;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .hint {
+            font-size: 12px;
+            color: #666;
+            margin-top: 10px;
+        }
+
+        .debug {
+            font-size: 11px;
+            color: #999;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="search-box">
+            <h1>🔍 Nostr Profile Card</h1>
+            <div class="input-group">
+                <input type="text" id="hexInput" placeholder="Enter 64-char hex public key">
+                <button onclick="searchProfile()">Search</button>
+            </div>
+            <div class="hint">Paste your Nostr hex public key (64 characters)</div>
+            <div class="debug" id="debug"></div>
+        </div>
+
+        <div class="loading" id="loading">Loading profile...</div>
+        <div class="error" id="error"></div>
+
+        <div class="business-card" id="businessCard">
+            <div class="card-header">
+                <div class="avatar" id="avatar">👤</div>
+                <h2 id="profileName">Name</h2>
+                <p id="profileHex" style="font-size: 11px; word-break: break-all;">hex</p>
+            </div>
+            <div class="card-body">
+                <div class="info-row">
+                    <div class="info-label">About</div>
+                    <div class="info-value" id="profileAbout">No bio available</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Website</div>
+                    <div class="info-value" id="profileWebsite">Not provided</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Location</div>
+                    <div class="info-value" id="profileLocation">Not specified</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Lightning Address</div>
+                    <div class="info-value" id="profileLN">Not provided</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function logDebug(msg) {
+            console.log(msg);
+            const debug = document.getElementById('debug');
+            debug.textContent += msg + '\n';
+        }
+
+        async function searchProfile() {
+            const hexInput = document.getElementById('hexInput').value.trim();
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const card = document.getElementById('businessCard');
+            const debug = document.getElementById('debug');
+
+            debug.textContent = '';
+
+            if (!hexInput) {
+                showError('Please enter a hex key');
+                return;
+            }
+
+            if (!/^[a-f0-9]{64}$/i.test(hexInput)) {
+                showError('Invalid hex format. Must be 64 characters (0-9, a-f)');
+                return;
+            }
+
+            loading.classList.add('active');
+            error.classList.remove('active');
+            card.classList.remove('active');
+
+            try {
+                const hexKey = hexInput.toLowerCase();
+                logDebug('Searching for: ' + hexKey.substring(0, 16) + '...');
+
+                const profile = await fetchProfileFromRelay(hexKey);
+
+                if (profile) {
+                    logDebug('Profile found!');
+                    displayProfile(hexKey, profile);
+                    card.classList.add('active');
+                } else {
+                    showError('Profile not found on any relay');
+                }
+            } catch (err) {
+                showError('Error: ' + err.message);
+                logDebug('Error: ' + err.message);
+                console.error(err);
+            } finally {
+                loading.classList.remove('active');
+            }
+        }
+
+        async function fetchProfileFromRelay(hexKey) {
+            // Try multiple relay APIs
+            const relayApis = [
+                `https://nostr.band/api/v0/profiles?ids=${hexKey}`,
+                `https://api.nostr.band/v0/profile/${hexKey}`
+            ];
+
+            for (const url of relayApis) {
+                try {
+                    logDebug('Trying: ' + url.substring(0, 40) + '...');
+                    const response = await fetch(url);
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        logDebug('Response received');
+                        
+                        // Handle different API response formats
+                        let profile = null;
+                        
+                        if (data.profile) {
+                            profile = typeof data.profile.content === 'string' 
+                                ? JSON.parse(data.profile.content) 
+                                : data.profile.content;
+                        } else if (data.profiles && data.profiles[0]) {
+                            profile = typeof data.profiles[0].content === 'string'
+                                ? JSON.parse(data.profiles[0].content)
+                                : data.profiles[0].content;
+                        }
+                        
+                        if (profile) {
+                            logDebug('Profile parsed successfully');
+                            return profile;
+                        }
+                    }
+                } catch (err) {
+                    logDebug('API failed: ' + err.message);
+                    continue;
+                }
+            }
+
+            logDebug('All APIs exhausted');
+            return null;
+        }
+
+        function displayProfile(hexKey, profile) {
+            document.getElementById('profileName').textContent = profile.name || 'Unknown';
+            document.getElementById('profileHex').textContent = hexKey;
+            document.getElementById('profileAbout').textContent = profile.about || 'No bio available';
+            document.getElementById('profileLocation').textContent = profile.location || 'Not specified';
+            document.getElementById('profileLN').textContent = profile.lud16 || profile.lud06 || 'Not provided';
+
+            if (profile.website) {
+                document.getElementById('profileWebsite').innerHTML = `<a href="${profile.website}" target="_blank">${profile.website}</a>`;
+            } else {
+                document.getElementById('profileWebsite').textContent = 'Not provided';
+            }
+
+            if (profile.picture) {
+                document.getElementById('avatar').innerHTML = `<img src="${profile.picture}" alt="avatar" onerror="this.parentElement.innerHTML='👤'">`;
+            } else {
+                document.getElementById('avatar').textContent = '👤';
+            }
+        }
+
+        function showError(message) {
+            const error = document.getElementById('error');
+            error.textContent = message;
+            error.classList.add('active');
+            document.getElementById('businessCard').classList.remove('active');
+        }
+
+        document.getElementById('hexInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') searchProfile();
+        });
+    </script>
+</body>
+</html>
