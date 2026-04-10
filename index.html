@@ -298,33 +298,60 @@
         }
 
 async function fetchProfileFromRelay(hexKey) {
-    const relayApis = [
-        `https://njump.me/${hexKey}/json`,
-        `https://nostr.band/p/${hexKey}/json`,
+    const relays = [
+        'wss://relay.damus.io',
+        'wss://nostr.wine',
+        'wss://nos.lol',
+        'wss://relay.nostr.band'
     ];
 
-    for (const url of relayApis) {
+    for (const relayUrl of relays) {
         try {
-            logDebug('Trying: ' + url.substring(0, 50) + '...');
-            const response = await fetch(url);
+            logDebug('Connecting to: ' + relayUrl);
             
-            if (response.ok) {
-                const data = await response.json();
-                logDebug('Response received');
-                
-                // njump.me returns profile directly
-                if (data.name || data.about || data.picture) {
-                    logDebug('Profile found!');
-                    return data;
-                }
-            }
+            const ws = new WebSocket(relayUrl);
+            
+            return new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    ws.close();
+                    reject(new Error('Timeout'));
+                }, 5000);
+
+                ws.onopen = () => {
+                    logDebug('Connected, requesting profile...');
+                    // Subscribe to metadata events for this pubkey
+                    ws.send(JSON.stringify([
+                        "REQ",
+                        "profile-" + hexKey.substring(0, 8),
+                        { kinds: [0], authors: [hexKey], limit: 1 }
+                    ]));
+                };
+
+                ws.onmessage = (event) => {
+                    const msg = JSON.parse(event.data);
+                    
+                    if (msg[0] === 'EVENT' && msg[2].kind === 0) {
+                        logDebug('Profile found!');
+                        const profile = JSON.parse(msg[2].content);
+                        clearTimeout(timeout);
+                        ws.close();
+                        resolve(profile);
+                    }
+                };
+
+                ws.onerror = (err) => {
+                    clearTimeout(timeout);
+                    ws.close();
+                    reject(err);
+                };
+            });
         } catch (err) {
-            logDebug('API failed: ' + err.message);
+            logDebug('Relay failed: ' + err.message);
             continue;
         }
     }
 
-    logDebug('All APIs exhausted');
+    logDebug('All relays exhausted');
     return null;
 }
         
