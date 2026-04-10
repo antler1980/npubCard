@@ -206,18 +206,20 @@
             margin: 10px 0;
         }
 
-        .pubkey {
+        .pubkey-section {
             font-size: 12px;
             color: #999;
             margin-top: 15px;
             word-break: break-all;
         }
 
-        .pubkey code {
+        .pubkey-section code {
             background: #f5f5f5;
             padding: 2px 6px;
             border-radius: 3px;
             font-family: monospace;
+            display: block;
+            margin-top: 5px;
         }
 
         .all-fields {
@@ -394,6 +396,23 @@
                 return hex;
             } catch (e) {
                 console.error('Decode error:', e);
+                return null;
+            }
+        }
+
+        function hexToNpub(hex) {
+            try {
+                const bytes = [];
+                for (let i = 0; i < hex.length; i += 2) {
+                    bytes.push(parseInt(hex.substr(i, 2), 16));
+                }
+                const converted = convertBits(bytes, 8, 5);
+                let npub = 'npub1';
+                for (let i = 0; i < converted.length; i++) {
+                    npub += CHARSET[converted[i]];
+                }
+                return npub;
+            } catch (e) {
                 return null;
             }
         }
@@ -622,7 +641,6 @@
                 name: null,
                 about: null,
                 picture: null,
-                banner: null,
                 website: null,
                 nip05: null,
                 lud06: null,
@@ -632,7 +650,6 @@
                 nostr: null,
                 followers: 0,
                 following: 0,
-                postCount: 0,
                 lastActivity: null
             };
 
@@ -660,26 +677,6 @@
                     }
                 }
 
-                // Count posts (kind 1) from last 30 days
-                const thirtyDaysAgo = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60);
-                let maxPostsFound = 0;
-                let latestPostTime = null;
-
-                for (const relayUrl of RELAYS) {
-                    const postsData = await fetchEventsFromRelay(relayUrl, hexKey, 1, thirtyDaysAgo);
-                    if (postsData.length > maxPostsFound) {
-                        maxPostsFound = postsData.length;
-                        if (postsData.length > 0) {
-                            latestPostTime = Math.max(...postsData.map(p => p.created_at));
-                        }
-                    }
-                }
-
-                profile.postCount = maxPostsFound;
-                if (latestPostTime) {
-                    profile.lastActivity = new Date(latestPostTime * 1000);
-                }
-
                 // Fetch followers
                 const followersList = await fetchFollowersFromRelays(hexKey);
                 profile.followers = followersList.length;
@@ -698,7 +695,7 @@
             const card = document.createElement('div');
             card.className = 'profile-card';
 
-            let headerHtml = `<div class="profile-header" style="background-image: ${profile.banner ? `url('${profile.banner}')` : 'none'}; background-color: #e0e0e0;">`;
+            let headerHtml = `<div class="profile-header" style="background-color: #e0e0e0;">`;
             
             if (profile.picture) {
                 headerHtml += `<img class="profile-picture" src="${profile.picture}" alt="Profile" onerror="this.style.display='none'">`;
@@ -728,6 +725,8 @@
                 linksHtml.push(`<p>⚡ LNURL: ${escapeHtml(profile.lud06)}</p>`);
             }
 
+            const npub = hexToNpub(profile.pubkey);
+
             card.innerHTML = `
                 ${headerHtml}
                 <div class="profile-content">
@@ -746,17 +745,16 @@
                             <span class="stat-value">${profile.following}</span>
                             <span class="stat-label">Following</span>
                         </div>
-                        <div class="stat">
-                            <span class="stat-value">${profile.postCount}</span>
-                            <span class="stat-label">Posts (30d)</span>
-                        </div>
                     </div>
                     
                     ${linksHtml.length > 0 ? `<div class="profile-links">${linksHtml.join('')}</div>` : ''}
                     
-                    ${profile.lastActivity ? `<p class="last-activity">Last active: ${profile.lastActivity.toLocaleDateString()}</p>` : ''}
-                    
-                    <p class="pubkey">Public Key: <code>${profile.pubkey.substring(0, 16)}...</code></p>
+                    <div class="pubkey-section">
+                        <div><strong>npub:</strong></div>
+                        <code>${npub}</code>
+                        <div style="margin-top: 10px;"><strong>Hex:</strong></div>
+                        <code>${profile.pubkey}</code>
+                    </div>
                     
                     <div class="all-fields">
                         <h3>All Profile Fields</h3>
