@@ -108,7 +108,7 @@
             justify-content: center;
             margin: 0 auto 20px;
             color: #999;
-            font-size: 12px;
+            font-size: 40px;
         }
 
         .profile-info h2 {
@@ -195,19 +195,30 @@
         const CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 
         function bech32Decode(bech) {
-            bech = bech.toLowerCase();
-            const pos = bech.lastIndexOf('1');
-            if (pos < 1 || pos + 7 > bech.length) return null;
+            const bechLower = bech.toLowerCase();
+            const pos = bechLower.lastIndexOf('1');
             
-            const hrp = bech.substring(0, pos);
-            const data = [];
+            console.log('Decoding bech32, pos:', pos);
             
-            for (let i = pos + 1; i < bech.length; i++) {
-                const d = CHARSET.indexOf(bech[i]);
-                if (d < 0) return null;
-                data.push(d);
+            if (pos < 1 || pos + 7 > bechLower.length) {
+                console.log('Invalid pos');
+                return null;
             }
             
+            const hrp = bechLower.substring(0, pos);
+            console.log('HRP:', hrp);
+            
+            const data = [];
+            for (let i = pos + 1; i < bechLower.length; i++) {
+                const idx = CHARSET.indexOf(bechLower[i]);
+                if (idx < 0) {
+                    console.log('Invalid character:', bechLower[i]);
+                    return null;
+                }
+                data.push(idx);
+            }
+            
+            console.log('Data array length:', data.length);
             return { hrp, data };
         }
 
@@ -226,22 +237,48 @@
                 }
             }
             
+            if (bits > 0) {
+                ret.push((acc << (toBits - bits)) & maxv);
+            }
+            
+            console.log('Converted length:', ret.length);
             return ret;
         }
 
         function decodeNpub(npub) {
+            console.log('Starting npub decode for:', npub);
+            
             try {
                 const decoded = bech32Decode(npub);
-                if (!decoded || decoded.hrp !== 'npub') return null;
+                if (!decoded) {
+                    console.log('Bech32 decode returned null');
+                    return null;
+                }
+                
+                console.log('Decoded HRP:', decoded.hrp);
+                if (decoded.hrp !== 'npub') {
+                    console.log('Wrong HRP, expected npub got:', decoded.hrp);
+                    return null;
+                }
                 
                 const converted = convertBits(decoded.data, 5, 8);
-                if (!converted || converted.length !== 32) return null;
+                if (!converted) {
+                    console.log('Convert bits returned null');
+                    return null;
+                }
+                
+                console.log('Converted array length:', converted.length);
+                if (converted.length !== 32) {
+                    console.log('Wrong length, expected 32 got:', converted.length);
+                    return null;
+                }
                 
                 let hex = '';
                 for (let i = 0; i < converted.length; i++) {
                     hex += converted[i].toString(16).padStart(2, '0');
                 }
                 
+                console.log('Final hex:', hex);
                 return hex;
             } catch (e) {
                 console.error('Decode error:', e);
