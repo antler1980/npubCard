@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nostr Profile Finder</title>
-    <script src="https://cdn.jsdelivr.net/npm/nostr-tools@1.17.0"></script>
     <style>
         * {
             margin: 0;
@@ -193,16 +192,61 @@
     </div>
 
     <script>
+        const CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+
+        function bech32Decode(bech) {
+            bech = bech.toLowerCase();
+            const pos = bech.lastIndexOf('1');
+            if (pos < 1 || pos + 7 > bech.length) return null;
+            
+            const hrp = bech.substring(0, pos);
+            const data = [];
+            
+            for (let i = pos + 1; i < bech.length; i++) {
+                const d = CHARSET.indexOf(bech[i]);
+                if (d < 0) return null;
+                data.push(d);
+            }
+            
+            return { hrp, data };
+        }
+
+        function convertBits(data, fromBits, toBits) {
+            let acc = 0;
+            let bits = 0;
+            const ret = [];
+            const maxv = (1 << toBits) - 1;
+            
+            for (let i = 0; i < data.length; i++) {
+                acc = (acc << fromBits) | data[i];
+                bits += fromBits;
+                while (bits >= toBits) {
+                    bits -= toBits;
+                    ret.push((acc >> bits) & maxv);
+                }
+            }
+            
+            return ret;
+        }
+
         function decodeNpub(npub) {
             try {
-                const decoded = window.NostrTools.nip19.decode(npub);
-                if (decoded.type === 'npub') {
-                    return decoded.data;
+                const decoded = bech32Decode(npub);
+                if (!decoded || decoded.hrp !== 'npub') return null;
+                
+                const converted = convertBits(decoded.data, 5, 8);
+                if (!converted || converted.length !== 32) return null;
+                
+                let hex = '';
+                for (let i = 0; i < converted.length; i++) {
+                    hex += converted[i].toString(16).padStart(2, '0');
                 }
-            } catch (err) {
-                console.error('Decode error:', err);
+                
+                return hex;
+            } catch (e) {
+                console.error('Decode error:', e);
+                return null;
             }
-            return null;
         }
 
         async function fetchProfileFromRelay(hexKey) {
@@ -216,12 +260,9 @@
             for (const relayUrl of relays) {
                 try {
                     const profile = await queryRelay(relayUrl, hexKey);
-                    if (profile) {
-                        return profile;
-                    }
+                    if (profile) return profile;
                 } catch (err) {
                     console.error(`Relay ${relayUrl} failed:`, err);
-                    continue;
                 }
             }
 
@@ -230,63 +271,48 @@
 
         function queryRelay(relayUrl, hexKey) {
             return new Promise((resolve, reject) => {
-                try {
-                    const ws = new WebSocket(relayUrl);
-                    let resolved = false;
-                    
-                    const timeout = setTimeout(() => {
+                const ws = new WebSocket(relayUrl);
+                let resolved = false;
+                
+                const timeout = setTimeout(() => {
+                    resolved = true;
+                    ws.close();
+                    reject(new Error('Timeout'));
+                }, 8000);
+
+                ws.onopen = () => {
+                    ws.send(JSON.stringify([
+                        "REQ",
+                        "profile-" + hexKey.substring(0, 8),
+                        { kinds: [0], authors: [hexKey], limit: 1 }
+                    ]));
+                };
+
+                ws.onmessage = (event) => {
+                    try {
+                        const msg = JSON.parse(event.data);
+                        if (msg[0] === 'EVENT' && msg[2].kind === 0 && !resolved) {
+                            resolved = true;
+                            clearTimeout(timeout);
+                            ws.close();
+                            resolve(JSON.parse(msg[2].content));
+                        }
+                    } catch (err) {
+                        console.error('Parse error:', err);
+                    }
+                };
+
+                ws.onerror = () => {
+                    if (!resolved) {
                         resolved = true;
-                        ws.close();
-                        reject(new Error('Timeout'));
-                    }, 8000);
-
-                    ws.onopen = () => {
-                        console.log('Connected to', relayUrl);
-                        ws.send(JSON.stringify([
-                            "REQ",
-                            "profile-" + hexKey.substring(0, 8),
-                            { kinds: [0], authors: [hexKey], limit: 1 }
-                        ]));
-                    };
-
-                    ws.onmessage = (event) => {
-                        try {
-                            const msg = JSON.parse(event.data);
-                            
-                            if (msg[0] === 'EVENT' && msg[2].kind === 0) {
-                                if (!resolved) {
-                                    resolved = true;
-                                    clearTimeout(timeout);
-                                    const profile = JSON.parse(msg[2].content);
-                                    ws.close();
-                                    resolve(profile);
-                                }
-                            }
-                        } catch (err) {
-                            console.error('Message parse error:', err);
-                        }
-                    };
-
-                    ws.onerror = (error) => {
-                        console.error('WebSocket error:', error);
                         clearTimeout(timeout);
-                        ws.close();
-                        if (!resolved) {
-                            resolved = true;
-                            reject(new Error('WebSocket error'));
-                        }
-                    };
+                        reject(new Error('WebSocket error'));
+                    }
+                };
 
-                    ws.onclose = () => {
-                        clearTimeout(timeout);
-                        if (!resolved) {
-                            resolved = true;
-                            reject(new Error('Connection closed'));
-                        }
-                    };
-                } catch (err) {
-                    reject(err);
-                }
+                ws.onclose = () => {
+                    clearTimeout(timeout);
+                };
             });
         }
 
@@ -301,7 +327,7 @@
 
             resultsDiv.innerHTML = '<p class="loading">Searching...</p>';
             
-            let hexKey = input;
+            let hexKey = input.toLowerCase();
             
             if (input.startsWith('npub1')) {
                 hexKey = decodeNpub(input);
@@ -311,8 +337,8 @@
                 }
             }
 
-            if (!/^[a-f0-9]{64}$/i.test(hexKey)) {
-                resultsDiv.innerHTML = '<p class="error">Invalid hex key format (must be 64 characters)</p>';
+            if (!/^[a-f0-9]{64}$/.test(hexKey)) {
+                resultsDiv.innerHTML = '<p class="error">Invalid key format</p>';
                 return;
             }
 
@@ -322,7 +348,7 @@
                 if (profile) {
                     resultsDiv.innerHTML = `
                         <div class="profile-card">
-                            ${profile.picture ? `<img src="${profile.picture}" alt="avatar" class="avatar" onerror="this.style.display='none'">` : '<div class="avatar-placeholder">No Image</div>'}
+                            ${profile.picture ? `<img src="${profile.picture}" alt="avatar" class="avatar" onerror="this.style.display='none'">` : '<div class="avatar-placeholder">👤</div>'}
                             <div class="profile-info">
                                 <h2>${profile.name || 'Unknown'}</h2>
                                 <p class="about">${profile.about || 'No bio'}</p>
@@ -333,11 +359,10 @@
                         </div>
                     `;
                 } else {
-                    resultsDiv.innerHTML = '<p class="error">Profile not found on any relay</p>';
+                    resultsDiv.innerHTML = '<p class="error">Profile not found</p>';
                 }
             } catch (err) {
-                console.error('Search error:', err);
-                resultsDiv.innerHTML = '<p class="error">Error fetching profile. Try again later.</p>';
+                resultsDiv.innerHTML = '<p class="error">Error fetching profile</p>';
             }
         }
 
