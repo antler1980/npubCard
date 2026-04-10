@@ -245,7 +245,6 @@
                     return null;
                 }
                 
-                // Skip first byte and take only 32 bytes
                 let hex = '';
                 for (let i = 1; i < 33; i++) {
                     hex += converted[i].toString(16).padStart(2, '0');
@@ -263,7 +262,9 @@
                 'wss://relay.damus.io',
                 'wss://nostr.wine',
                 'wss://nos.lol',
-                'wss://relay.nostr.band'
+                'wss://relay.nostr.band',
+                'wss://purplepag.es',
+                'wss://nostr-pub.wellorder.net'
             ];
 
             for (const relayUrl of relays) {
@@ -271,7 +272,7 @@
                     const profile = await queryRelay(relayUrl, hexKey);
                     if (profile) return profile;
                 } catch (err) {
-                    console.error(`Relay ${relayUrl} failed:`, err);
+                    console.error(`Relay ${relayUrl} failed:`, err.message);
                 }
             }
 
@@ -282,14 +283,18 @@
             return new Promise((resolve, reject) => {
                 const ws = new WebSocket(relayUrl);
                 let resolved = false;
+                let profileReceived = false;
                 
                 const timeout = setTimeout(() => {
-                    resolved = true;
-                    ws.close();
-                    reject(new Error('Timeout'));
-                }, 8000);
+                    if (!resolved && !profileReceived) {
+                        resolved = true;
+                        ws.close();
+                        reject(new Error('Timeout'));
+                    }
+                }, 15000);
 
                 ws.onopen = () => {
+                    console.log('Connected to', relayUrl);
                     ws.send(JSON.stringify([
                         "REQ",
                         "profile-" + hexKey.substring(0, 8),
@@ -301,17 +306,24 @@
                     try {
                         const msg = JSON.parse(event.data);
                         if (msg[0] === 'EVENT' && msg[2].kind === 0 && !resolved) {
+                            profileReceived = true;
                             resolved = true;
                             clearTimeout(timeout);
                             ws.close();
                             resolve(JSON.parse(msg[2].content));
+                        }
+                        if (msg[0] === 'EOSE' && !profileReceived && !resolved) {
+                            resolved = true;
+                            clearTimeout(timeout);
+                            ws.close();
+                            reject(new Error('No profile found'));
                         }
                     } catch (err) {
                         console.error('Parse error:', err);
                     }
                 };
 
-                ws.onerror = () => {
+                ws.onerror = (error) => {
                     if (!resolved) {
                         resolved = true;
                         clearTimeout(timeout);
@@ -320,7 +332,11 @@
                 };
 
                 ws.onclose = () => {
-                    clearTimeout(timeout);
+                    if (!resolved) {
+                        resolved = true;
+                        clearTimeout(timeout);
+                        reject(new Error('Connection closed'));
+                    }
                 };
             });
         }
@@ -368,10 +384,10 @@
                         </div>
                     `;
                 } else {
-                    resultsDiv.innerHTML = '<p class="error">Profile not found</p>';
+                    resultsDiv.innerHTML = '<p class="error">Profile not found on any relay</p>';
                 }
             } catch (err) {
-                resultsDiv.innerHTML = '<p class="error">Error fetching profile</p>';
+                resultsDiv.innerHTML = '<p class="error">Error fetching profile. All relays are timing out.</p>';
             }
         }
 
