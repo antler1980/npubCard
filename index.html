@@ -287,10 +287,13 @@
                         clearTimeout(connectionTimeout);
                         console.log('Connected to:', relayUrl);
                         
+                        const subscriptionId = "profile-" + Math.random().toString(36).substring(2, 9);
+                        console.log('Sending REQ with subscription:', subscriptionId);
+                        
                         ws.send(JSON.stringify([
                             "REQ",
-                            "profile-" + hexKey.substring(0, 8),
-                            { kinds: [0], authors: [hexKey], limit: 1 }
+                            subscriptionId,
+                            { kinds: [0], authors: [hexKey] }
                         ]));
 
                         messageTimeout = setTimeout(() => {
@@ -299,17 +302,19 @@
                                 cleanup();
                                 reject(new Error('Message timeout'));
                             }
-                        }, 5000);
+                        }, 8000);
                     };
 
                     ws.onmessage = (event) => {
                         try {
                             const msg = JSON.parse(event.data);
+                            console.log('Received:', msg[0], msg[1]);
                             
                             if (msg[0] === 'EVENT' && msg[2].kind === 0 && !resolved) {
                                 resolved = true;
                                 cleanup();
                                 const profile = JSON.parse(msg[2].content);
+                                console.log('Profile found!', profile.name);
                                 resolve(profile);
                             }
                         } catch (err) {
@@ -321,7 +326,7 @@
                         if (!resolved) {
                             resolved = true;
                             cleanup();
-                            reject(new Error('WebSocket error: ' + error));
+                            reject(new Error('WebSocket error'));
                         }
                     };
 
