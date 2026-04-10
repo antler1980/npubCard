@@ -365,21 +365,79 @@
     <div class="profile-complete" id="profile"></div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/nostr-tools@1.17.0"></script>
   <script>
-    async function fetchCompleteNostrProfile(npubOrHexOrProfile) {
-      let pubkey = npubOrHexOrProfile;
+    const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+
+    function bech32Decode(bech) {
+      bech = bech.toLowerCase();
+      const pos = bech.lastIndexOf('1');
+      if (pos < 1 || pos + 7 > bech.length) return null;
       
-      try {
-        if (npubOrHexOrProfile.startsWith('npub1')) {
-          const decoded = window.NostrTools.nip19.decode(npubOrHexOrProfile);
-          pubkey = decoded.data;
-        } else if (npubOrHexOrProfile.startsWith('nprofile1')) {
-          const decoded = window.NostrTools.nip19.decode(npubOrHexOrProfile);
-          pubkey = decoded.data.pubkey;
+      const data = [];
+      for (let i = pos + 1; i < bech.length; i++) {
+        const idx = CHARSET.indexOf(bech[i]);
+        if (idx < 0) return null;
+        data.push(idx);
+      }
+      return data;
+    }
+
+    function convertBits(data, fromBits, toBits, pad = true) {
+      let acc = 0;
+      let bits = 0;
+      let ret = [];
+      const maxv = (1 << toBits) - 1;
+      const max_acc = (1 << (fromBits + toBits - 1)) - 1;
+      
+      for (let i = 0; i < data.length; i++) {
+        const value = data[i];
+        if (value < 0 || (value >> fromBits)) return null;
+        acc = ((acc << fromBits) | value) & max_acc;
+        bits += fromBits;
+        while (bits >= toBits) {
+          bits -= toBits;
+          ret.push((acc >> bits) & maxv);
         }
+      }
+      
+      if (pad) {
+        if (bits) ret.push((acc << (toBits - bits)) & maxv);
+      } else if (bits >= fromBits || ((acc << (toBits - bits)) & maxv)) {
+        return null;
+      }
+      return ret;
+    }
+
+    function decodeNIP19(input) {
+      try {
+        const data = bech32Decode(input);
+        if (!data) return null;
+        
+        const hrp = input.toLowerCase().substring(0, input.toLowerCase().lastIndexOf('1'));
+        
+        if (hrp === 'npub') {
+          const converted = convertBits(data.slice(1), 5, 8, false);
+          if (!converted || converted.length < 32) return null;
+          return converted.slice(0, 32).map(b => b.toString(16).padStart(2, '0')).join('');
+        } else if (hrp === 'nprofile') {
+          const converted = convertBits(data.slice(1), 5, 8, false);
+          if (!converted || converted.length < 32) return null;
+          return converted.slice(0, 32).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+        return null;
       } catch (e) {
-        console.log('Could not decode, treating as hex:', e.message);
+        return null;
+      }
+    }
+
+    async function fetchCompleteNostrProfile(npubOrHexOrProfile) {
+      let pubkey = npubOrHexOrProfile.toLowerCase();
+      
+      if (npubOrHexOrProfile.startsWith('npub1') || npubOrHexOrProfile.startsWith('nprofile1')) {
+        const decoded = decodeNIP19(npubOrHexOrProfile);
+        if (decoded) {
+          pubkey = decoded;
+        }
       }
 
       const relays = [
@@ -387,32 +445,35 @@
         'wss://nos.lol',
         'wss://relay.nostr.band',
         'wss://purplepag.es',
-        'wss://nostr.wine',
-        'wss://relay.primal.net',
-        'wss://offchain.pub'
+        'wss://nostr.wine'
       ];
 
       let profileData = {};
       let allEvents = [];
-      const eventKinds = [0, 3, 10002, 10009];
+      const eventKinds = [0, 3, 10002];
 
       for (const relay of relays) {
         try {
-          const ws = new WebSocket(relay);
-          
-          for (const kind of eventKinds) {
-            await new Promise((resolve) => {
-              const timeout = setTimeout(() => {
-                ws.close();
-                resolve();
-              }, 8000);
+          await new Promise((resolve) => {
+            let ws;
+            let connected = false;
+            const timeout = setTimeout(() => {
+              if (ws) ws.close();
+              resolve();
+            }, 5000);
 
+            try {
+              ws = new WebSocket(relay);
+              
               ws.onopen = () => {
-                ws.send(JSON.stringify([
-                  'REQ',
-                  'profile-' + kind + '-' + Math.random(),
-                  { authors: [pubkey], kinds: [kind], limit: 1 }
-                ]));
+                connected = true;
+                for (const kind of eventKinds) {
+                  ws.send(JSON.stringify([
+                    'REQ',
+                    'profile-' + kind,
+                    { authors: [pubkey], kinds: [kind], limit: 1 }
+                  ]));
+                }
               };
 
               ws.onmessage = (event) => {
@@ -421,28 +482,24 @@
                   if (message[0] === 'EVENT') {
                     allEvents.push(message[2]);
                   }
-                  if (message[0] === 'EOSE') {
-                    clearTimeout(timeout);
-                    ws.close();
-                    resolve();
-                  }
                 } catch (e) {
                   console.error('Parse error:', e);
                 }
               };
 
               ws.onerror = () => {
-                clearTimeout(timeout);
-                ws.close();
-                resolve();
+                if (ws) ws.close();
               };
 
               ws.onclose = () => {
                 clearTimeout(timeout);
                 resolve();
               };
-            });
-          }
+            } catch (error) {
+              clearTimeout(timeout);
+              resolve();
+            }
+          });
         } catch (error) {
           console.log(`Relay ${relay} error:`, error.message);
         }
