@@ -196,7 +196,7 @@
         const CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 
         function bech32Decode(bech) {
-            if ((bech.toLowerCase() != bech) && (bech.toUpperCase() != bech)) {
+            if ((bech.toLowerCase() !== bech) && (bech.toUpperCase() !== bech)) {
                 return null;
             }
             bech = bech.toLowerCase();
@@ -204,13 +204,13 @@
             if (pos < 1 || pos + 7 > bech.length || bech.length > 90) {
                 return null;
             }
-            if (!bech.split('').every((x) => CHARSET.indexOf(x) < 32)) {
-                return null;
-            }
+            
             const hrp = bech.substring(0, pos);
             const data = [];
             for (let i = pos + 1; i < bech.length; ++i) {
-                data.push(CHARSET.indexOf(bech[i]));
+                const c = CHARSET.indexOf(bech[i]);
+                if (c < 0) return null;
+                data.push(c);
             }
             return { hrp, data };
         }
@@ -221,6 +221,7 @@
             const ret = [];
             const maxv = (1 << toBits) - 1;
             const max_acc = (1 << (fromBits + toBits - 1)) - 1;
+            
             for (let i = 0; i < data.length; ++i) {
                 const value = data[i];
                 if (value < 0 || (value >> fromBits)) {
@@ -246,15 +247,23 @@
         function decodeNpub(npub) {
             try {
                 const decoded = bech32Decode(npub);
-                if (!decoded) return null;
+                if (!decoded || decoded.hrp !== 'npub') {
+                    console.error('Invalid bech32 or hrp');
+                    return null;
+                }
                 
                 const converted = convertBits(decoded.data, 5, 8, false);
-                if (!converted) return null;
+                if (!converted) {
+                    console.error('Failed to convert bits');
+                    return null;
+                }
                 
                 let hexKey = '';
                 for (let i = 0; i < converted.length; i++) {
                     hexKey += converted[i].toString(16).padStart(2, '0');
                 }
+                
+                console.log('Decoded hex:', hexKey);
                 return hexKey;
             } catch (err) {
                 console.error('Decode error:', err);
@@ -360,6 +369,7 @@
             
             let hexKey = input;
             
+            // If it's an npub, decode it
             if (input.startsWith('npub1')) {
                 hexKey = decodeNpub(input);
                 if (!hexKey) {
@@ -368,8 +378,9 @@
                 }
             }
 
+            // Validate hex format
             if (!/^[a-f0-9]{64}$/i.test(hexKey)) {
-                resultsDiv.innerHTML = '<p class="error">Invalid hex key format</p>';
+                resultsDiv.innerHTML = '<p class="error">Invalid hex key format (must be 64 characters)</p>';
                 return;
             }
 
