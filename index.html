@@ -365,92 +365,21 @@
     <div class="profile-complete" id="profile"></div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/nostr-tools@1.17.0"></script>
   <script>
-    const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
-
-    function bech32Decode(bech) {
-      bech = bech.toLowerCase();
-      const pos = bech.lastIndexOf('1');
-      if (pos < 1 || pos + 7 > bech.length) return null;
-      
-      const data = [];
-      for (let i = pos + 1; i < bech.length; i++) {
-        const idx = CHARSET.indexOf(bech[i]);
-        if (idx < 0) return null;
-        data.push(idx);
-      }
-      return data;
-    }
-
-    function convertBits(data, fromBits, toBits, pad = true) {
-      let acc = 0;
-      let bits = 0;
-      let ret = [];
-      const maxv = (1 << toBits) - 1;
-      const max_acc = (1 << (fromBits + toBits - 1)) - 1;
-      
-      for (let i = 0; i < data.length; i++) {
-        const value = data[i];
-        if (value < 0 || (value >> fromBits)) return null;
-        acc = ((acc << fromBits) | value) & max_acc;
-        bits += fromBits;
-        while (bits >= toBits) {
-          bits -= toBits;
-          ret.push((acc >> bits) & maxv);
-        }
-      }
-      
-      if (pad) {
-        if (bits) ret.push((acc << (toBits - bits)) & maxv);
-      } else if (bits >= fromBits || ((acc << (toBits - bits)) & maxv)) {
-        return null;
-      }
-      return ret;
-    }
-
-    async function decodeNIP19(input) {
-      try {
-        const data = bech32Decode(input);
-        if (!data) throw new Error('Invalid bech32');
-        
-        const hrp = input.toLowerCase().substring(0, input.toLowerCase().lastIndexOf('1'));
-        
-        if (hrp === 'npub') {
-          const converted = convertBits(data.slice(1), 5, 8, false);
-          if (!converted) throw new Error('Invalid conversion');
-          return converted.map(b => b.toString(16).padStart(2, '0')).join('');
-        } else if (hrp === 'nprofile') {
-          const converted = convertBits(data.slice(1), 5, 8, false);
-          if (!converted) throw new Error('Invalid conversion');
-          
-          let pubkeyBytes = [];
-          let i = 0;
-          while (i < converted.length) {
-            const tlvType = converted[i];
-            const tlvLen = converted[i + 1];
-            i += 2;
-            
-            if (tlvType === 0) {
-              pubkeyBytes = converted.slice(i, i + tlvLen);
-              return pubkeyBytes.map(b => b.toString(16).padStart(2, '0')).join('');
-            }
-            i += tlvLen;
-          }
-        }
-        throw new Error('Unknown NIP-19 format');
-      } catch (e) {
-        console.error('Error decoding NIP-19:', e);
-        throw e;
-      }
-    }
-
     async function fetchCompleteNostrProfile(npubOrHexOrProfile) {
       let pubkey = npubOrHexOrProfile;
       
-      if (npubOrHexOrProfile.startsWith('npub1')) {
-        pubkey = await decodeNIP19(npubOrHexOrProfile);
-      } else if (npubOrHexOrProfile.startsWith('nprofile1')) {
-        pubkey = await decodeNIP19(npubOrHexOrProfile);
+      try {
+        if (npubOrHexOrProfile.startsWith('npub1')) {
+          const decoded = window.NostrTools.nip19.decode(npubOrHexOrProfile);
+          pubkey = decoded.data;
+        } else if (npubOrHexOrProfile.startsWith('nprofile1')) {
+          const decoded = window.NostrTools.nip19.decode(npubOrHexOrProfile);
+          pubkey = decoded.data.pubkey;
+        }
+      } catch (e) {
+        console.log('Could not decode, treating as hex:', e.message);
       }
 
       const relays = [
