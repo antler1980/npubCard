@@ -298,41 +298,24 @@
         }
 
 async function fetchProfileFromRelay(hexKey) {
-    // CORS proxies that work reliably
     const relayApis = [
-        `https://api.allorigins.win/raw?url=https://api.nostr.band/v0/profiles?ids=${hexKey}`,
-        `https://thingproxy.freeboard.io/fetch/https://api.nostr.band/v0/profiles?ids=${hexKey}`,
-        `https://corsproxy.io/?https://api.nostr.band/v0/profiles?ids=${hexKey}`
+        `https://njump.me/${hexKey}/json`,
+        `https://nostr.band/p/${hexKey}/json`,
     ];
 
     for (const url of relayApis) {
         try {
             logDebug('Trying: ' + url.substring(0, 50) + '...');
-            const response = await fetch(url, {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0'
-                }
-            });
+            const response = await fetch(url);
             
             if (response.ok) {
                 const data = await response.json();
                 logDebug('Response received');
                 
-                let profile = null;
-                
-                if (data.profile) {
-                    profile = typeof data.profile.content === 'string' 
-                        ? JSON.parse(data.profile.content) 
-                        : data.profile.content;
-                } else if (data.profiles && data.profiles[0]) {
-                    profile = typeof data.profiles[0].content === 'string'
-                        ? JSON.parse(data.profiles[0].content)
-                        : data.profiles[0].content;
-                }
-                
-                if (profile) {
+                // njump.me returns profile directly
+                if (data.name || data.about || data.picture) {
                     logDebug('Profile found!');
-                    return profile;
+                    return data;
                 }
             }
         } catch (err) {
@@ -344,6 +327,7 @@ async function fetchProfileFromRelay(hexKey) {
     logDebug('All APIs exhausted');
     return null;
 }
+        
         function displayProfile(hexKey, profile) {
             document.getElementById('profileName').textContent = profile.name || 'Unknown';
             document.getElementById('profileHex').textContent = hexKey;
