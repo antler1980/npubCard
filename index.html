@@ -350,7 +350,7 @@
       <input 
         type="text" 
         id="npubInput" 
-        placeholder="Enter npub1..., nprofile1..., or hex key" 
+        placeholder="Enter npub1... or hex key" 
       >
       <button onclick="handleFetch()">Fetch Profile</button>
     </div>
@@ -408,23 +408,14 @@
       return ret;
     }
 
-    function decodeNIP19(input) {
+    function decodeNpub(input) {
       try {
         const data = bech32Decode(input);
         if (!data) return null;
         
-        const hrp = input.toLowerCase().substring(0, input.toLowerCase().lastIndexOf('1'));
-        
-        if (hrp === 'npub') {
-          const converted = convertBits(data.slice(1), 5, 8, false);
-          if (!converted || converted.length < 32) return null;
-          return converted.slice(0, 32).map(b => b.toString(16).padStart(2, '0')).join('');
-        } else if (hrp === 'nprofile') {
-          const converted = convertBits(data.slice(1), 5, 8, false);
-          if (!converted || converted.length < 32) return null;
-          return converted.slice(0, 32).map(b => b.toString(16).padStart(2, '0')).join('');
-        }
-        return null;
+        const converted = convertBits(data.slice(1), 5, 8, false);
+        if (!converted || converted.length < 32) return null;
+        return converted.slice(0, 32).map(b => b.toString(16).padStart(2, '0')).join('');
       } catch (e) {
         return null;
       }
@@ -436,7 +427,7 @@
         const timeout = setTimeout(() => {
           if (ws && ws.readyState === WebSocket.OPEN) ws.close();
           resolve(null);
-        }, 6000);
+        }, 5000);
 
         try {
           ws = new WebSocket(relay);
@@ -482,14 +473,20 @@
       });
     }
 
-    async function fetchCompleteNostrProfile(npubOrHexOrProfile) {
-      let pubkey = npubOrHexOrProfile.toLowerCase();
+    async function fetchCompleteNostrProfile(npubOrHex) {
+      let pubkey = npubOrHex.toLowerCase();
       
-      if (npubOrHexOrProfile.startsWith('npub1') || npubOrHexOrProfile.startsWith('nprofile1')) {
-        const decoded = decodeNIP19(npubOrHexOrProfile);
+      if (npubOrHex.startsWith('npub1')) {
+        const decoded = decodeNpub(npubOrHex);
         if (decoded) {
           pubkey = decoded;
+        } else {
+          throw new Error('Invalid npub format');
         }
+      }
+
+      if (!/^[a-f0-9]{64}$/.test(pubkey)) {
+        throw new Error('Invalid hex key format');
       }
 
       const relays = [
@@ -702,7 +699,7 @@
 
       try {
         if (!npubInput) {
-          throw new Error('Please enter an npub, nprofile, or hex key');
+          throw new Error('Please enter an npub or hex key');
         }
 
         const profile = await fetchCompleteNostrProfile(npubInput);
