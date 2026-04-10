@@ -298,23 +298,26 @@
         }
 
 async function fetchProfileFromRelay(hexKey) {
-    // Try multiple relay APIs that support profile queries
+    // CORS proxies that work reliably
     const relayApis = [
-        `https://api.nostr.band/v0/profiles?ids=${hexKey}`,
-        `https://purplepag.es/api/v0/profiles?ids=${hexKey}`,
-        `https://nostr.wine/api/v0/profiles?ids=${hexKey}`
+        `https://api.allorigins.win/raw?url=https://api.nostr.band/v0/profiles?ids=${hexKey}`,
+        `https://thingproxy.freeboard.io/fetch/https://api.nostr.band/v0/profiles?ids=${hexKey}`,
+        `https://corsproxy.io/?https://api.nostr.band/v0/profiles?ids=${hexKey}`
     ];
 
     for (const url of relayApis) {
         try {
             logDebug('Trying: ' + url.substring(0, 50) + '...');
-            const response = await fetch(url);
+            const response = await fetch(url, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0'
+                }
+            });
             
             if (response.ok) {
                 const data = await response.json();
                 logDebug('Response received');
                 
-                // Handle different API response formats
                 let profile = null;
                 
                 if (data.profile) {
@@ -328,7 +331,7 @@ async function fetchProfileFromRelay(hexKey) {
                 }
                 
                 if (profile) {
-                    logDebug('Profile found on: ' + url.substring(0, 30));
+                    logDebug('Profile found!');
                     return profile;
                 }
             }
