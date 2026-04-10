@@ -246,10 +246,11 @@
                 }
                 
                 let hex = '';
-                for (let i = 1; i <= 32; i++) {
+                for (let i = 0; i < 32; i++) {
                     hex += converted[i].toString(16).padStart(2, '0');
                 }
                 
+                console.log('Decoded npub to hex:', hex);
                 return hex;
             } catch (e) {
                 console.error('Decode error:', e);
@@ -285,10 +286,8 @@
 
                     ws.onopen = () => {
                         clearTimeout(connectionTimeout);
-                        console.log('Connected to:', relayUrl);
                         
                         const subscriptionId = "profile-" + Math.random().toString(36).substring(2, 9);
-                        console.log('Sending REQ with subscription:', subscriptionId);
                         
                         ws.send(JSON.stringify([
                             "REQ",
@@ -300,7 +299,7 @@
                             if (!resolved) {
                                 resolved = true;
                                 cleanup();
-                                reject(new Error('Message timeout'));
+                                reject(new Error('No profile found'));
                             }
                         }, 8000);
                     };
@@ -308,13 +307,11 @@
                     ws.onmessage = (event) => {
                         try {
                             const msg = JSON.parse(event.data);
-                            console.log('Received:', msg[0], msg[1]);
                             
                             if (msg[0] === 'EVENT' && msg[2].kind === 0 && !resolved) {
                                 resolved = true;
                                 cleanup();
                                 const profile = JSON.parse(msg[2].content);
-                                console.log('Profile found!', profile.name);
                                 resolve(profile);
                             }
                         } catch (err) {
@@ -353,13 +350,11 @@
 
             for (const relayUrl of relays) {
                 try {
-                    console.log('Attempting relay:', relayUrl);
                     const profile = await queryRelay(relayUrl, hexKey);
                     if (profile) {
                         return profile;
                     }
                 } catch (err) {
-                    console.log('Relay failed:', relayUrl, '-', err.message);
                     continue;
                 }
             }
