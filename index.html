@@ -245,13 +245,11 @@
                     return null;
                 }
                 
-                // Take bytes 1-32 (skip the first checksum byte)
                 let hex = '';
                 for (let i = 1; i <= 32; i++) {
                     hex += converted[i].toString(16).padStart(2, '0');
                 }
                 
-                console.log('Decoded npub to hex:', hex);
                 return hex;
             } catch (e) {
                 console.error('Decode error:', e);
@@ -260,91 +258,56 @@
         }
 
         async function fetchProfileFromRelay(hexKey) {
-            console.log('Searching for hex key:', hexKey);
-            
             const relays = [
                 'wss://relay.damus.io',
                 'wss://nostr.wine',
                 'wss://nos.lol',
-                'wss://relay.nostr.band',
-                'wss://purplepag.es',
-                'wss://nostr-pub.wellorder.net'
+                'wss://relay.nostr.band'
             ];
 
             for (const relayUrl of relays) {
                 try {
-                    const profile = await queryRelay(relayUrl, hexKey);
+                    const ws = new WebSocket(relayUrl);
+                    
+                    const profile = await new Promise((resolve, reject) => {
+                        const timeout = setTimeout(() => {
+                            ws.close();
+                            reject(new Error('Timeout'));
+                        }, 5000);
+
+                        ws.onopen = () => {
+                            ws.send(JSON.stringify([
+                                "REQ",
+                                "profile-" + hexKey.substring(0, 8),
+                                { kinds: [0], authors: [hexKey], limit: 1 }
+                            ]));
+                        };
+
+                        ws.onmessage = (event) => {
+                            const msg = JSON.parse(event.data);
+                            
+                            if (msg[0] === 'EVENT' && msg[2].kind === 0) {
+                                const profile = JSON.parse(msg[2].content);
+                                clearTimeout(timeout);
+                                ws.close();
+                                resolve(profile);
+                            }
+                        };
+
+                        ws.onerror = (err) => {
+                            clearTimeout(timeout);
+                            ws.close();
+                            reject(err);
+                        };
+                    });
+                    
                     if (profile) return profile;
                 } catch (err) {
-                    console.error(`Relay ${relayUrl} failed:`, err.message);
+                    continue;
                 }
             }
 
             return null;
-        }
-
-        function queryRelay(relayUrl, hexKey) {
-            return new Promise((resolve, reject) => {
-                const ws = new WebSocket(relayUrl);
-                let resolved = false;
-                let profileReceived = false;
-                
-                const timeout = setTimeout(() => {
-                    if (!resolved && !profileReceived) {
-                        resolved = true;
-                        ws.close();
-                        reject(new Error('Timeout'));
-                    }
-                }, 15000);
-
-                ws.onopen = () => {
-                    console.log('Connected to', relayUrl, 'querying for:', hexKey);
-                    ws.send(JSON.stringify([
-                        "REQ",
-                        "profile-" + hexKey.substring(0, 8),
-                        { kinds: [0], authors: [hexKey], limit: 1 }
-                    ]));
-                };
-
-                ws.onmessage = (event) => {
-                    try {
-                        const msg = JSON.parse(event.data);
-                        console.log('Message from relay:', msg[0]);
-                        if (msg[0] === 'EVENT' && msg[2].kind === 0 && !resolved) {
-                            profileReceived = true;
-                            resolved = true;
-                            clearTimeout(timeout);
-                            ws.close();
-                            console.log('Profile received!');
-                            resolve(JSON.parse(msg[2].content));
-                        }
-                        if (msg[0] === 'EOSE' && !profileReceived && !resolved) {
-                            resolved = true;
-                            clearTimeout(timeout);
-                            ws.close();
-                            reject(new Error('No profile found'));
-                        }
-                    } catch (err) {
-                        console.error('Parse error:', err);
-                    }
-                };
-
-                ws.onerror = (error) => {
-                    if (!resolved) {
-                        resolved = true;
-                        clearTimeout(timeout);
-                        reject(new Error('WebSocket error'));
-                    }
-                };
-
-                ws.onclose = () => {
-                    if (!resolved) {
-                        resolved = true;
-                        clearTimeout(timeout);
-                        reject(new Error('Connection closed'));
-                    }
-                };
-            });
         }
 
         async function searchProfile() {
@@ -369,7 +332,7 @@
             }
 
             if (!/^[a-f0-9]{64}$/.test(hexKey)) {
-                resultsDiv.innerHTML = '<p class="error">Invalid key format (must be 64 hex chars). Got: ' + hexKey + '</p>';
+                resultsDiv.innerHTML = '<p class="error">Invalid key format</p>';
                 return;
             }
 
