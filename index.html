@@ -430,6 +430,58 @@
       }
     }
 
+    function queryRelay(relay, pubkey, kind) {
+      return new Promise((resolve) => {
+        let ws;
+        const timeout = setTimeout(() => {
+          if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+          resolve(null);
+        }, 6000);
+
+        try {
+          ws = new WebSocket(relay);
+          
+          ws.onopen = () => {
+            ws.send(JSON.stringify([
+              'REQ',
+              `${kind}-${Math.random()}`,
+              { kinds: [kind], authors: [pubkey], limit: 1 }
+            ]));
+          };
+
+          ws.onmessage = (event) => {
+            try {
+              const msg = JSON.parse(event.data);
+              if (msg[0] === 'EVENT' && msg[2].kind === kind) {
+                clearTimeout(timeout);
+                if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+                resolve(msg[2]);
+              } else if (msg[0] === 'EOSE') {
+                clearTimeout(timeout);
+                if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+                resolve(null);
+              }
+            } catch (e) {
+              console.error('Parse error:', e);
+            }
+          };
+
+          ws.onerror = () => {
+            clearTimeout(timeout);
+            if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+            resolve(null);
+          };
+
+          ws.onclose = () => {
+            clearTimeout(timeout);
+          };
+        } catch (error) {
+          clearTimeout(timeout);
+          resolve(null);
+        }
+      });
+    }
+
     async function fetchCompleteNostrProfile(npubOrHexOrProfile) {
       let pubkey = npubOrHexOrProfile.toLowerCase();
       
@@ -443,66 +495,24 @@
       const relays = [
         'wss://relay.damus.io',
         'wss://nos.lol',
-        'wss://relay.nostr.band',
-        'wss://purplepag.es',
-        'wss://nostr.wine'
+        'wss://nostr.wine',
+        'wss://purplepag.es'
       ];
 
       let profileData = {};
       let allEvents = [];
-      const eventKinds = [0, 3, 10002];
 
       for (const relay of relays) {
-        try {
-          await new Promise((resolve) => {
-            let ws;
-            let connected = false;
-            const timeout = setTimeout(() => {
-              if (ws) ws.close();
-              resolve();
-            }, 5000);
+        const event0 = await queryRelay(relay, pubkey, 0);
+        if (event0) allEvents.push(event0);
 
-            try {
-              ws = new WebSocket(relay);
-              
-              ws.onopen = () => {
-                connected = true;
-                for (const kind of eventKinds) {
-                  ws.send(JSON.stringify([
-                    'REQ',
-                    'profile-' + kind,
-                    { authors: [pubkey], kinds: [kind], limit: 1 }
-                  ]));
-                }
-              };
+        const event3 = await queryRelay(relay, pubkey, 3);
+        if (event3) allEvents.push(event3);
 
-              ws.onmessage = (event) => {
-                try {
-                  const message = JSON.parse(event.data);
-                  if (message[0] === 'EVENT') {
-                    allEvents.push(message[2]);
-                  }
-                } catch (e) {
-                  console.error('Parse error:', e);
-                }
-              };
+        const event10002 = await queryRelay(relay, pubkey, 10002);
+        if (event10002) allEvents.push(event10002);
 
-              ws.onerror = () => {
-                if (ws) ws.close();
-              };
-
-              ws.onclose = () => {
-                clearTimeout(timeout);
-                resolve();
-              };
-            } catch (error) {
-              clearTimeout(timeout);
-              resolve();
-            }
-          });
-        } catch (error) {
-          console.log(`Relay ${relay} error:`, error.message);
-        }
+        if (allEvents.length > 0) break;
       }
 
       const metadataEvent = allEvents.find(e => e.kind === 0);
