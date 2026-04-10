@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nostr Profile Finder</title>
-    <script src="https://cdn.jsdelivr.net/npm/bech32@2.0.0/bech32.js"></script>
     <style>
         * {
             margin: 0;
@@ -193,10 +192,69 @@
     </div>
 
     <script>
+        // Bech32 decoding implementation
+        const CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+
+        function bech32Decode(bech) {
+            if ((bech.toLowerCase() != bech) && (bech.toUpperCase() != bech)) {
+                return null;
+            }
+            bech = bech.toLowerCase();
+            const pos = bech.lastIndexOf('1');
+            if (pos < 1 || pos + 7 > bech.length || bech.length > 90) {
+                return null;
+            }
+            if (!bech.split('').every((x) => CHARSET.indexOf(x) < 32)) {
+                return null;
+            }
+            const hrp = bech.substring(0, pos);
+            const data = [];
+            for (let i = pos + 1; i < bech.length; ++i) {
+                data.push(CHARSET.indexOf(bech[i]));
+            }
+            return { hrp, data };
+        }
+
+        function convertBits(data, fromBits, toBits, pad) {
+            let acc = 0;
+            let bits = 0;
+            const ret = [];
+            const maxv = (1 << toBits) - 1;
+            const max_acc = (1 << (fromBits + toBits - 1)) - 1;
+            for (let i = 0; i < data.length; ++i) {
+                const value = data[i];
+                if (value < 0 || (value >> fromBits)) {
+                    return null;
+                }
+                acc = ((acc << fromBits) | value) & max_acc;
+                bits += fromBits;
+                while (bits >= toBits) {
+                    bits -= toBits;
+                    ret.push((acc >> bits) & maxv);
+                }
+            }
+            if (pad) {
+                if (bits) {
+                    ret.push((acc << (toBits - bits)) & maxv);
+                }
+            } else if (bits >= fromBits || ((acc << (toBits - bits)) & maxv)) {
+                return null;
+            }
+            return ret;
+        }
+
         function decodeNpub(npub) {
             try {
-                const decoded = bech32.decode(npub);
-                const hexKey = Buffer.from(bech32.fromWords(decoded.words)).toString('hex');
+                const decoded = bech32Decode(npub);
+                if (!decoded) return null;
+                
+                const converted = convertBits(decoded.data, 5, 8, false);
+                if (!converted) return null;
+                
+                let hexKey = '';
+                for (let i = 0; i < converted.length; i++) {
+                    hexKey += converted[i].toString(16).padStart(2, '0');
+                }
                 return hexKey;
             } catch (err) {
                 return null;
