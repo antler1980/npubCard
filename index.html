@@ -257,52 +257,104 @@
             }
         }
 
+        function queryRelay(relayUrl, hexKey) {
+            return new Promise((resolve, reject) => {
+                let ws;
+                let connectionTimeout;
+                let messageTimeout;
+                let resolved = false;
+
+                const cleanup = () => {
+                    clearTimeout(connectionTimeout);
+                    clearTimeout(messageTimeout);
+                    try {
+                        ws.close();
+                    } catch (e) {}
+                };
+
+                try {
+                    ws = new WebSocket(relayUrl);
+                    
+                    connectionTimeout = setTimeout(() => {
+                        if (!resolved) {
+                            resolved = true;
+                            cleanup();
+                            reject(new Error('Connection timeout'));
+                        }
+                    }, 3000);
+
+                    ws.onopen = () => {
+                        clearTimeout(connectionTimeout);
+                        console.log('Connected to:', relayUrl);
+                        
+                        ws.send(JSON.stringify([
+                            "REQ",
+                            "profile-" + hexKey.substring(0, 8),
+                            { kinds: [0], authors: [hexKey], limit: 1 }
+                        ]));
+
+                        messageTimeout = setTimeout(() => {
+                            if (!resolved) {
+                                resolved = true;
+                                cleanup();
+                                reject(new Error('Message timeout'));
+                            }
+                        }, 5000);
+                    };
+
+                    ws.onmessage = (event) => {
+                        try {
+                            const msg = JSON.parse(event.data);
+                            
+                            if (msg[0] === 'EVENT' && msg[2].kind === 0 && !resolved) {
+                                resolved = true;
+                                cleanup();
+                                const profile = JSON.parse(msg[2].content);
+                                resolve(profile);
+                            }
+                        } catch (err) {
+                            console.error('Parse error:', err);
+                        }
+                    };
+
+                    ws.onerror = (error) => {
+                        if (!resolved) {
+                            resolved = true;
+                            cleanup();
+                            reject(new Error('WebSocket error: ' + error));
+                        }
+                    };
+
+                    ws.onclose = () => {
+                        if (!resolved) {
+                            resolved = true;
+                            cleanup();
+                            reject(new Error('Connection closed'));
+                        }
+                    };
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        }
+
         async function fetchProfileFromRelay(hexKey) {
             const relays = [
-                'wss://relay.damus.io',
-                'wss://nostr.wine',
                 'wss://nos.lol',
+                'wss://nostr.wine',
+                'wss://relay.damus.io',
                 'wss://relay.nostr.band'
             ];
 
             for (const relayUrl of relays) {
                 try {
-                    const ws = new WebSocket(relayUrl);
-                    
-                    const profile = await new Promise((resolve, reject) => {
-                        const timeout = setTimeout(() => {
-                            ws.close();
-                            reject(new Error('Timeout'));
-                        }, 5000);
-
-                        ws.onopen = () => {
-                            ws.send(JSON.stringify([
-                                "REQ",
-                                "profile-" + hexKey.substring(0, 8),
-                                { kinds: [0], authors: [hexKey], limit: 1 }
-                            ]));
-                        };
-
-                        ws.onmessage = (event) => {
-                            const msg = JSON.parse(event.data);
-                            
-                            if (msg[0] === 'EVENT' && msg[2].kind === 0) {
-                                const profile = JSON.parse(msg[2].content);
-                                clearTimeout(timeout);
-                                ws.close();
-                                resolve(profile);
-                            }
-                        };
-
-                        ws.onerror = (err) => {
-                            clearTimeout(timeout);
-                            ws.close();
-                            reject(err);
-                        };
-                    });
-                    
-                    if (profile) return profile;
+                    console.log('Attempting relay:', relayUrl);
+                    const profile = await queryRelay(relayUrl, hexKey);
+                    if (profile) {
+                        return profile;
+                    }
                 } catch (err) {
+                    console.log('Relay failed:', relayUrl, '-', err.message);
                     continue;
                 }
             }
