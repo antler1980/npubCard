@@ -350,8 +350,7 @@
       <input 
         type="text" 
         id="npubInput" 
-        placeholder="Enter npub1... or nprofile1..." 
-        value="nprofile1qqsrx7zw3jhxrnz4ksyrevm94g4ztzttzqhxwenvjsk2pjt4el0dnqghzifp"
+        placeholder="Enter npub1..., nprofile1..., or hex key" 
       >
       <button onclick="handleFetch()">Fetch Profile</button>
     </div>
@@ -367,18 +366,20 @@
   </div>
 
   <script>
-    // NIP-19 Bech32 decoder
+    const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+
     function bech32Decode(bech) {
-      const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
-      let d = bech.toLowerCase().split('1');
-      let dp = d[d.length - 1];
-      let values = [];
-      for (let i = 0; i < dp.length; ++i) {
-        let v = CHARSET.indexOf(dp[i]);
-        if (v < 0) throw new Error('Invalid character');
-        values.push(v);
+      bech = bech.toLowerCase();
+      const pos = bech.lastIndexOf('1');
+      if (pos < 1 || pos + 7 > bech.length) return null;
+      
+      const data = [];
+      for (let i = pos + 1; i < bech.length; i++) {
+        const idx = CHARSET.indexOf(bech[i]);
+        if (idx < 0) return null;
+        data.push(idx);
       }
-      return values;
+      return data;
     }
 
     function convertBits(data, fromBits, toBits, pad = true) {
@@ -387,11 +388,10 @@
       let ret = [];
       const maxv = (1 << toBits) - 1;
       const max_acc = (1 << (fromBits + toBits - 1)) - 1;
-      for (let i = 0; i < data.length; ++i) {
-        let value = data[i];
-        if (value < 0 || (value >> fromBits)) {
-          throw new Error('Invalid data for conversion');
-        }
+      
+      for (let i = 0; i < data.length; i++) {
+        const value = data[i];
+        if (value < 0 || (value >> fromBits)) return null;
         acc = ((acc << fromBits) | value) & max_acc;
         bits += fromBits;
         while (bits >= toBits) {
@@ -399,28 +399,60 @@
           ret.push((acc >> bits) & maxv);
         }
       }
+      
       if (pad) {
         if (bits) ret.push((acc << (toBits - bits)) & maxv);
       } else if (bits >= fromBits || ((acc << (toBits - bits)) & maxv)) {
-        throw new Error('Invalid padding');
+        return null;
       }
       return ret;
     }
 
-    async function npubToPubkey(npub) {
+    async function decodeNIP19(input) {
       try {
-        let data = bech32Decode(npub);
-        let converted = convertBits(data.slice(1), 5, 8, false);
-        return Array.from(converted).map(b => b.toString(16).padStart(2, '0')).join('');
+        const data = bech32Decode(input);
+        if (!data) throw new Error('Invalid bech32');
+        
+        const hrp = input.toLowerCase().substring(0, input.toLowerCase().lastIndexOf('1'));
+        
+        if (hrp === 'npub') {
+          const converted = convertBits(data.slice(1), 5, 8, false);
+          if (!converted) throw new Error('Invalid conversion');
+          return converted.map(b => b.toString(16).padStart(2, '0')).join('');
+        } else if (hrp === 'nprofile') {
+          const converted = convertBits(data.slice(1), 5, 8, false);
+          if (!converted) throw new Error('Invalid conversion');
+          
+          let pubkeyBytes = [];
+          let i = 0;
+          while (i < converted.length) {
+            const tlvType = converted[i];
+            const tlvLen = converted[i + 1];
+            i += 2;
+            
+            if (tlvType === 0) {
+              pubkeyBytes = converted.slice(i, i + tlvLen);
+              return pubkeyBytes.map(b => b.toString(16).padStart(2, '0')).join('');
+            }
+            i += tlvLen;
+          }
+        }
+        throw new Error('Unknown NIP-19 format');
       } catch (e) {
-        console.error('Error decoding npub:', e);
+        console.error('Error decoding NIP-19:', e);
         throw e;
       }
     }
 
-    async function fetchCompleteNostrProfile(npub) {
-      const pubkey = await npubToPubkey(npub);
+    async function fetchCompleteNostrProfile(npubOrHexOrProfile) {
+      let pubkey = npubOrHexOrProfile;
       
+      if (npubOrHexOrProfile.startsWith('npub1')) {
+        pubkey = await decodeNIP19(npubOrHexOrProfile);
+      } else if (npubOrHexOrProfile.startsWith('nprofile1')) {
+        pubkey = await decodeNIP19(npubOrHexOrProfile);
+      }
+
       const relays = [
         'wss://relay.damus.io',
         'wss://nos.lol',
@@ -433,7 +465,6 @@
 
       let profileData = {};
       let allEvents = [];
-
       const eventKinds = [0, 3, 10002, 10009];
 
       for (const relay of relays) {
@@ -441,7 +472,7 @@
           const ws = new WebSocket(relay);
           
           for (const kind of eventKinds) {
-            await new Promise((resolve, reject) => {
+            await new Promise((resolve) => {
               const timeout = setTimeout(() => {
                 ws.close();
                 resolve();
@@ -456,20 +487,24 @@
               };
 
               ws.onmessage = (event) => {
-                const message = JSON.parse(event.data);
-                
-                if (message[0] === 'EVENT') {
-                  allEvents.push(message[2]);
-                }
-                
-                if (message[0] === 'EOSE') {
-                  clearTimeout(timeout);
-                  resolve();
+                try {
+                  const message = JSON.parse(event.data);
+                  if (message[0] === 'EVENT') {
+                    allEvents.push(message[2]);
+                  }
+                  if (message[0] === 'EOSE') {
+                    clearTimeout(timeout);
+                    ws.close();
+                    resolve();
+                  }
+                } catch (e) {
+                  console.error('Parse error:', e);
                 }
               };
 
               ws.onerror = () => {
                 clearTimeout(timeout);
+                ws.close();
                 resolve();
               };
 
@@ -479,14 +514,11 @@
               };
             });
           }
-          
-          ws.close();
         } catch (error) {
           console.log(`Relay ${relay} error:`, error.message);
         }
       }
 
-      // Process kind 0 (metadata)
       const metadataEvent = allEvents.find(e => e.kind === 0);
       if (metadataEvent) {
         try {
@@ -497,14 +529,12 @@
         }
       }
 
-      // Process kind 3 (contact list)
       const contactEvent = allEvents.find(e => e.kind === 3);
       if (contactEvent) {
         profileData.followers_count = contactEvent.tags.filter(t => t[0] === 'p').length;
         profileData.following = contactEvent.tags.filter(t => t[0] === 'p').map(t => t[1]);
       }
 
-      // Process kind 10002 (relay list)
       const relayListEvent = allEvents.find(e => e.kind === 10002);
       if (relayListEvent) {
         profileData.relays = relayListEvent.tags.map(t => ({
@@ -516,7 +546,6 @@
 
       profileData.raw_events = allEvents;
       profileData.pubkey = pubkey;
-      profileData.npub = npub;
 
       return profileData;
     }
@@ -529,19 +558,17 @@
         '"': '&quot;',
         "'": '&#039;'
       };
-      return text.replace(/[&<>"']/g, m => map[m]);
+      return String(text).replace(/[&<>"']/g, m => map[m]);
     }
 
     function displayAllProfileData(profileData) {
       let html = '<div class="profile-complete">';
 
-      // Banner
       if (profileData.banner || profileData.header_image) {
         const bannerUrl = profileData.banner || profileData.header_image;
         html += `<img src="${escapeHtml(bannerUrl)}" class="profile-banner" alt="Profile banner" onerror="this.style.display='none'" />`;
       }
 
-      // Profile info cards
       html += '<div class="profile-info">';
 
       if (profileData.picture || profileData.avatar || profileData.image) {
@@ -575,7 +602,6 @@
 
       html += '</div>';
 
-      // Metadata section
       const standardFields = [
         'name', 'display_name', 'username',
         'about', 'bio', 'description',
@@ -610,12 +636,10 @@
         }
       }
 
-      // Custom fields
       const customFields = Object.entries(profileData).filter(([field, value]) => 
         !standardFields.includes(field) && 
         field !== 'raw_events' && 
-        field !== 'pubkey' && 
-        field !== 'npub' &&
+        field !== 'pubkey' &&
         field !== 'followers_count' &&
         field !== 'following' &&
         field !== 'relays'
@@ -639,7 +663,6 @@
 
       html += '</table>';
 
-      // Relays
       if (profileData.relays && profileData.relays.length > 0) {
         html += '<h2>Relays</h2>';
         html += '<table class="relays-table">';
@@ -654,7 +677,6 @@
         html += '</table>';
       }
 
-      // Raw data
       if (profileData.raw_events && profileData.raw_events.length > 0) {
         html += '<h2>Raw Event Data</h2>';
         html += '<details>';
@@ -663,11 +685,9 @@
         html += '</details>';
       }
 
-      // IDs
       html += '<h2>Identifiers</h2>';
       html += '<table class="profile-table">';
       html += `<tr><td>pubkey (hex)</td><td><code>${escapeHtml(profileData.pubkey)}</code></td></tr>`;
-      html += `<tr><td>npub (bech32)</td><td><code>${escapeHtml(profileData.npub)}</code></td></tr>`;
       html += '</table>';
 
       html += '</div>';
@@ -686,7 +706,7 @@
 
       try {
         if (!npubInput) {
-          throw new Error('Please enter an npub or nprofile address');
+          throw new Error('Please enter an npub, nprofile, or hex key');
         }
 
         const profile = await fetchCompleteNostrProfile(npubInput);
@@ -706,16 +726,8 @@
       }
     }
 
-    // Fetch on Enter key
     document.getElementById('npubInput').addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
-        handleFetch();
-      }
-    });
-
-    // Auto-fetch on page load
-    window.addEventListener('load', () => {
-      if (document.getElementById('npubInput').value) {
         handleFetch();
       }
     });
