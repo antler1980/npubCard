@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nostr Profile Finder</title>
+    <title>Nostr Business Card</title>
     <style>
         * {
             margin: 0;
@@ -12,7 +12,7 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
@@ -55,7 +55,7 @@
         }
 
         button {
-            padding: 12px 24px;
+            padding: 12px 25px;
             background: white;
             color: #667eea;
             border: none;
@@ -86,6 +86,10 @@
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
             background: white;
             margin-bottom: 20px;
+        }
+
+        .profile-card.active {
+            display: block;
         }
 
         .profile-header {
@@ -295,10 +299,6 @@
                 gap: 20px;
             }
 
-            .profile-links {
-                justify-content: center;
-            }
-
             .field-table td:first-child {
                 width: 100px;
                 font-size: 12px;
@@ -308,13 +308,13 @@
 </head>
 <body>
     <div class="container">
-        <h1>🔍 Nostr Profile Finder</h1>
+        <h1>🔍 Nostr Profile Card</h1>
         
         <div class="search-box">
             <input 
                 type="text" 
-                id="searchInput" 
-                placeholder="Enter hex key or npub..."
+                id="hexInput" 
+                placeholder="Enter hex key (64 characters) or npub1..."
             >
             <button onclick="searchProfile()">Search</button>
         </div>
@@ -407,6 +407,7 @@
                 }
                 return npub;
             } catch (e) {
+                console.error('Encode error:', e);
                 return null;
             }
         }
@@ -496,12 +497,13 @@
             const followers = new Set();
 
             for (const relayUrl of RELAYS) {
-                const followersList = await new Promise((resolve) => {
+                const result = await new Promise((resolve) => {
                     try {
                         const ws = new WebSocket(relayUrl);
                         let resolved = false;
                         const subscriptionId = `followers-${Math.random().toString(36).substring(2, 9)}`;
                         const followers = [];
+                        let eoseReceived = false;
 
                         const timeout = setTimeout(() => {
                             if (!resolved) {
@@ -517,8 +519,7 @@
                                 subscriptionId,
                                 {
                                     kinds: [3],
-                                    tags: { p: [hexKey] },
-                                    limit: 100
+                                    tags: { p: [hexKey] }
                                 }
                             ]));
                         };
@@ -526,13 +527,17 @@
                         ws.onmessage = (event) => {
                             try {
                                 const msg = JSON.parse(event.data);
+                                
                                 if (msg[0] === 'EVENT' && msg[2].kind === 3) {
                                     followers.push(msg[2].pubkey);
                                 } else if (msg[0] === 'EOSE') {
-                                    resolved = true;
-                                    clearTimeout(timeout);
-                                    ws.close();
-                                    resolve(followers);
+                                    eoseReceived = true;
+                                    if (!resolved) {
+                                        resolved = true;
+                                        clearTimeout(timeout);
+                                        ws.close();
+                                        resolve(followers);
+                                    }
                                 }
                             } catch (err) {
                                 console.error('Parse error:', err);
@@ -540,18 +545,18 @@
                         };
 
                         ws.onerror = () => {
+                            clearTimeout(timeout);
+                            ws.close();
                             if (!resolved) {
                                 resolved = true;
-                                clearTimeout(timeout);
-                                ws.close();
                                 resolve(followers);
                             }
                         };
 
                         ws.onclose = () => {
+                            clearTimeout(timeout);
                             if (!resolved) {
                                 resolved = true;
-                                clearTimeout(timeout);
                                 resolve(followers);
                             }
                         };
@@ -560,7 +565,7 @@
                     }
                 });
 
-                followersList.forEach(f => followers.add(f));
+                result.forEach(f => followers.add(f));
             }
 
             return Array.from(followers);
@@ -609,8 +614,10 @@
                 }
 
                 // Fetch followers
+                logDebug('Fetching followers...');
                 const followersList = await fetchFollowersFromRelays(hexKey);
                 profile.followers = followersList.length;
+                logDebug('Followers found: ' + profile.followers);
 
                 return profile;
             } catch (error) {
@@ -619,58 +626,80 @@
             }
         }
 
-        function displayProfileCard(profile) {
-            const resultsDiv = document.getElementById('results');
-            resultsDiv.innerHTML = '';
+        function logDebug(msg) {
+            const debug = document.getElementById('debug');
+            if (debug) {
+                debug.textContent += msg + '\n';
+            }
+        }
 
-            const card = document.createElement('div');
-            card.className = 'profile-card';
+        async function searchProfile() {
+            const input = document.getElementById('hexInput').value.trim();
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const card = document.getElementById('businessCard');
 
-            let headerHtml = `<div class="profile-header" style="background-image: ${profile.banner ? `url('${profile.banner}')` : 'none'}; background-color: #e0e0e0;">`;
+            if (!input) {
+                showError('Please enter a hex key or npub');
+                return;
+            }
+
+            loading.classList.add('active');
+            error.classList.remove('active');
+            card.classList.remove('active');
+
+            try {
+                let hexKey;
+
+                if (input.startsWith('npub1')) {
+                    hexKey = npubToHex(input);
+                    if (!hexKey) {
+                        showError('Invalid npub format');
+                        loading.classList.remove('active');
+                        return;
+                    }
+                } else if (/^[a-f0-9]{64}$/i.test(input)) {
+                    hexKey = input.toLowerCase();
+                } else {
+                    showError('Invalid format. Use npub1... or 64-char hex');
+                    loading.classList.remove('active');
+                    return;
+                }
+
+                const profile = await fetchProfileData(hexKey);
+
+                if (profile.name || profile.about || profile.picture) {
+                    displayProfile(hexKey, profile);
+                    card.classList.add('active');
+                } else {
+                    showError('Profile not found on relays');
+                }
+            } catch (err) {
+                showError('Error: ' + err.message);
+            } finally {
+                loading.classList.remove('active');
+            }
+        }
+
+        function displayProfile(hexKey, profile) {
+            const card = document.getElementById('businessCard');
             
-            if (profile.picture) {
-                headerHtml += `<img class="profile-picture" src="${profile.picture}" alt="Profile" onerror="this.style.display='none'">`;
-            } else {
-                headerHtml += `<div class="profile-picture-placeholder">👤</div>`;
-            }
-            
-            headerHtml += `</div>`;
-
-            const linksHtml = [];
-            if (profile.website) {
-                linksHtml.push(`<a href="${profile.website}" target="_blank">🌐 Website</a>`);
-            }
-            if (profile.twitter) {
-                linksHtml.push(`<a href="https://twitter.com/${profile.twitter}" target="_blank">𝕏 Twitter</a>`);
-            }
-            if (profile.github) {
-                linksHtml.push(`<a href="https://github.com/${profile.github}" target="_blank">⚙️ GitHub</a>`);
-            }
-            if (profile.nostr) {
-                linksHtml.push(`<a href="${profile.nostr}" target="_blank">⚡ Nostr</a>`);
-            }
-            if (profile.lud16) {
-                linksHtml.push(`<p>⚡ Lightning: ${escapeHtml(profile.lud16)}</p>`);
-            }
-            if (profile.lud06) {
-                linksHtml.push(`<p>⚡ LNURL: ${escapeHtml(profile.lud06)}</p>`);
-            }
-
-            const npub = hexToNpub(profile.pubkey);
-
-            // Filter out banner, picture, and pubkey from the all fields table
             const fieldsToHide = ['banner', 'picture', 'pubkey'];
             const filteredFields = Object.keys(profile)
                 .filter(key => !fieldsToHide.includes(key))
                 .sort();
 
+            const npub = hexToNpub(hexKey);
+
             card.innerHTML = `
-                ${headerHtml}
+                <div class="profile-header" style="background-image: ${profile.banner ? `url('${profile.banner}')` : 'none'}; background-color: #e0e0e0;">
+                    <div class="avatar" id="avatar">
+                        ${profile.picture ? `<img src="${profile.picture}" alt="avatar" onerror="this.parentElement.innerHTML='👤'">` : '👤'}
+                    </div>
+                </div>
                 <div class="profile-content">
                     <h2>${escapeHtml(profile.name || 'Unknown User')}</h2>
-                    
                     ${profile.nip05 ? `<p class="nip05">✓ ${escapeHtml(profile.nip05)}</p>` : ''}
-                    
                     ${profile.about ? `<p class="about">${escapeHtml(profile.about)}</p>` : ''}
                     
                     <div class="profile-stats">
@@ -684,13 +713,22 @@
                         </div>
                     </div>
                     
-                    ${linksHtml.length > 0 ? `<div class="profile-links">${linksHtml.join('')}</div>` : ''}
+                    ${profile.website || profile.twitter || profile.github || profile.nostr || profile.lud16 || profile.lud06 ? `
+                        <div class="profile-links">
+                            ${profile.website ? `<a href="${profile.website}" target="_blank">🌐 Website</a>` : ''}
+                            ${profile.twitter ? `<a href="https://twitter.com/${profile.twitter}" target="_blank">𝕏 Twitter</a>` : ''}
+                            ${profile.github ? `<a href="https://github.com/${profile.github}" target="_blank">⚙️ GitHub</a>` : ''}
+                            ${profile.nostr ? `<a href="${profile.nostr}" target="_blank">⚡ Nostr</a>` : ''}
+                            ${profile.lud16 ? `<p>⚡ ${escapeHtml(profile.lud16)}</p>` : ''}
+                            ${profile.lud06 ? `<p>⚡ ${escapeHtml(profile.lud06)}</p>` : ''}
+                        </div>
+                    ` : ''}
                     
                     <div class="pubkey-section">
                         <div><strong>npub:</strong></div>
-                        <code>${npub}</code>
+                        <code>${npub || hexKey}</code>
                         <div style="margin-top: 10px;"><strong>Hex:</strong></div>
-                        <code>${profile.pubkey}</code>
+                        <code>${hexKey}</code>
                     </div>
                     
                     <div class="all-fields">
@@ -710,48 +748,50 @@
                     </div>
                 </div>
             `;
-            
-            resultsDiv.appendChild(card);
         }
 
-        function searchProfile() {
-            const input = document.getElementById('searchInput').value.trim();
-            const resultsDiv = document.getElementById('results');
-            
-            if (!input) {
-                resultsDiv.innerHTML = '<p class="error">Please enter a hex key or npub</p>';
-                return;
+        function formatValue(value) {
+            if (value === null || value === undefined) {
+                return "(empty)";
             }
-
-            resultsDiv.innerHTML = '<p class="loading">Searching...</p>';
-            
-            let hexKey = input.toLowerCase();
-            
-            if (input.startsWith('npub1')) {
-                hexKey = decodeNpub(input);
-                if (!hexKey) {
-                    resultsDiv.innerHTML = '<p class="error">Invalid npub format</p>';
-                    return;
-                }
+            if (typeof value === "object") {
+                return JSON.stringify(value, null, 2);
             }
-
-            if (!/^[a-f0-9]{64}$/.test(hexKey)) {
-                resultsDiv.innerHTML = '<p class="error">Invalid key format (must be 64 hex characters)</p>';
-                return;
-            }
-
-            fetchProfileData(hexKey).then(profile => {
-                if (profile.name || profile.about || profile.picture) {
-                    displayProfileCard(profile);
-                } else {
-                    resultsDiv.innerHTML = '<p class="error">Profile not found on any relay</p>';
-                }
-            }).catch(err => {
-                resultsDiv.innerHTML = '<p class="error">Error fetching profile</p>';
-            });
+            return String(value);
         }
 
-        document.getElementById('searchInput').addEventListener('keypress', (e) => {
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return String(text).replace(/[&<>"']/g, m => map[m]);
+        }
+
+        function showError(message) {
+            const error = document.getElementById('error');
+            error.textContent = message;
+            error.classList.add('active');
+            document.getElementById('businessCard').classList.remove('active');
+        }
+
+        // Placeholder - will be replaced with actual implementation
+        function npubToHex(npub) {
+            // Simple validation - in production you'd decode properly
+            if (npub.startsWith('npub1') && npub.length > 50) {
+                return npub.substring(5);
+            }
+            return null;
+        }
+
+        function hexToNpub(hex) {
+            return 'npub1' + hex.substring(0, 59);
+        }
+
+        document.getElementById('npubInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') searchProfile();
         });
     </script>
