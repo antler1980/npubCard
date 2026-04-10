@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nostr Business Card</title>
+    <title>Nostr Profile Finder</title>
+    <script src="https://cdn.jsdelivr.net/npm/bech32@2.0.0/bech32.js"></script>
     <style>
         * {
             margin: 0;
@@ -12,7 +13,7 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
@@ -22,367 +23,283 @@
         }
 
         .container {
-            max-width: 500px;
             width: 100%;
+            max-width: 600px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 28px;
         }
 
         .search-box {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            display: flex;
+            gap: 10px;
             margin-bottom: 30px;
         }
 
-        .search-box h1 {
-            font-size: 24px;
-            margin-bottom: 20px;
-            color: #333;
-        }
-
-        .input-group {
-            display: flex;
-            gap: 10px;
-        }
-
-        input {
+        #searchInput {
             flex: 1;
-            padding: 12px;
-            border: 2px solid #ddd;
-            border-radius: 5px;
-            font-size: 14px;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
             transition: border-color 0.3s;
         }
 
-        input:focus {
+        #searchInput:focus {
             outline: none;
             border-color: #667eea;
         }
 
         button {
-            padding: 12px 25px;
-            background: #667eea;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
-            border-radius: 5px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
             cursor: pointer;
-            font-size: 14px;
-            font-weight: bold;
-            transition: background 0.3s;
+            transition: transform 0.2s, box-shadow 0.2s;
         }
 
         button:hover {
-            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
         }
 
-        .business-card {
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
-            overflow: hidden;
-            display: none;
+        button:active {
+            transform: translateY(0);
         }
 
-        .business-card.active {
-            display: block;
+        #results {
+            min-height: 100px;
         }
 
-        .card-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 40px 20px;
+        .profile-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 30px;
             text-align: center;
-            color: white;
         }
 
         .avatar {
             width: 100px;
             height: 100px;
             border-radius: 50%;
-            background: rgba(255, 255, 255, 0.3);
-            margin: 0 auto 15px;
+            object-fit: cover;
+            margin-bottom: 20px;
+            border: 3px solid #667eea;
+        }
+
+        .avatar-placeholder {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: #e0e0e0;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 40px;
-            border: 3px solid white;
-            overflow: hidden;
-        }
-
-        .avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .card-header h2 {
-            font-size: 24px;
-            margin-bottom: 5px;
-            word-break: break-word;
-        }
-
-        .card-header p {
-            font-size: 12px;
-            opacity: 0.9;
-        }
-
-        .card-body {
-            padding: 30px;
-        }
-
-        .info-row {
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #eee;
-        }
-
-        .info-row:last-child {
-            border-bottom: none;
-            margin-bottom: 0;
-            padding-bottom: 0;
-        }
-
-        .info-label {
-            font-size: 12px;
+            margin: 0 auto 20px;
             color: #999;
-            text-transform: uppercase;
-            font-weight: bold;
-            margin-bottom: 5px;
+            font-size: 12px;
         }
 
-        .info-value {
-            font-size: 14px;
+        .profile-info h2 {
             color: #333;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+
+        .about {
+            color: #666;
+            margin-bottom: 20px;
+            line-height: 1.5;
+            font-size: 15px;
+        }
+
+        .profile-info p {
+            color: #555;
+            margin: 12px 0;
+            font-size: 14px;
             word-break: break-all;
         }
 
-        .info-value a {
-            color: #667eea;
-            text-decoration: none;
+        .pubkey {
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 12px;
         }
 
-        .info-value a:hover {
-            text-decoration: underline;
-        }
-
-        .error {
-            background: #fee;
-            color: #c33;
+        .loading, .error {
+            text-align: center;
             padding: 20px;
-            border-radius: 10px;
-            margin-top: 20px;
-            display: none;
-        }
-
-        .error.active {
-            display: block;
+            border-radius: 8px;
+            font-size: 16px;
         }
 
         .loading {
-            text-align: center;
-            padding: 20px;
             color: #667eea;
-            display: none;
+            background: #f0f4ff;
         }
 
-        .loading.active {
-            display: block;
+        .error {
+            color: #d32f2f;
+            background: #ffebee;
         }
 
-        .hint {
-            font-size: 12px;
-            color: #666;
-            margin-top: 10px;
-        }
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+            }
 
-        .debug {
-            font-size: 11px;
-            color: #999;
-            margin-top: 15px;
-            padding-top: 15px;
-            border-top: 1px solid #ddd;
+            h1 {
+                font-size: 22px;
+            }
+
+            .search-box {
+                flex-direction: column;
+            }
+
+            button {
+                width: 100%;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
+        <h1>🔍 Nostr Profile Finder</h1>
+        
         <div class="search-box">
-            <h1>🔍 Nostr Profile Card</h1>
-            <div class="input-group">
-                <input type="text" id="hexInput" placeholder="Enter 64-char hex public key">
-                <button onclick="searchProfile()">Search</button>
-            </div>
-            <div class="hint">Paste your Nostr hex public key (64 characters)</div>
-            <div class="debug" id="debug"></div>
+            <input 
+                type="text" 
+                id="searchInput" 
+                placeholder="Enter hex key or npub..."
+            >
+            <button onclick="searchProfile()">Search</button>
         </div>
 
-        <div class="loading" id="loading">Loading profile...</div>
-        <div class="error" id="error"></div>
-
-        <div class="business-card" id="businessCard">
-            <div class="card-header">
-                <div class="avatar" id="avatar">👤</div>
-                <h2 id="profileName">Name</h2>
-                <p id="profileHex" style="font-size: 11px; word-break: break-all;">hex</p>
-            </div>
-            <div class="card-body">
-                <div class="info-row">
-                    <div class="info-label">About</div>
-                    <div class="info-value" id="profileAbout">No bio available</div>
-                </div>
-                <div class="info-row">
-                    <div class="info-label">Website</div>
-                    <div class="info-value" id="profileWebsite">Not provided</div>
-                </div>
-                <div class="info-row">
-                    <div class="info-label">Location</div>
-                    <div class="info-value" id="profileLocation">Not specified</div>
-                </div>
-                <div class="info-row">
-                    <div class="info-label">Lightning Address</div>
-                    <div class="info-value" id="profileLN">Not provided</div>
-                </div>
-            </div>
-        </div>
+        <div id="results"></div>
     </div>
 
     <script>
-        function logDebug(msg) {
-            console.log(msg);
-            const debug = document.getElementById('debug');
-            debug.textContent += msg + '\n';
+        function decodeNpub(npub) {
+            try {
+                const decoded = bech32.decode(npub);
+                const hexKey = Buffer.from(bech32.fromWords(decoded.words)).toString('hex');
+                return hexKey;
+            } catch (err) {
+                return null;
+            }
+        }
+
+        async function fetchProfileFromRelay(hexKey) {
+            const relays = [
+                'wss://relay.damus.io',
+                'wss://nostr.wine',
+                'wss://nos.lol',
+                'wss://relay.nostr.band'
+            ];
+
+            for (const relayUrl of relays) {
+                try {
+                    const ws = new WebSocket(relayUrl);
+                    
+                    return new Promise((resolve, reject) => {
+                        const timeout = setTimeout(() => {
+                            ws.close();
+                            reject(new Error('Timeout'));
+                        }, 5000);
+
+                        ws.onopen = () => {
+                            ws.send(JSON.stringify([
+                                "REQ",
+                                "profile-" + hexKey.substring(0, 8),
+                                { kinds: [0], authors: [hexKey], limit: 1 }
+                            ]));
+                        };
+
+                        ws.onmessage = (event) => {
+                            const msg = JSON.parse(event.data);
+                            
+                            if (msg[0] === 'EVENT' && msg[2].kind === 0) {
+                                const profile = JSON.parse(msg[2].content);
+                                clearTimeout(timeout);
+                                ws.close();
+                                resolve(profile);
+                            }
+                        };
+
+                        ws.onerror = () => {
+                            clearTimeout(timeout);
+                            ws.close();
+                            reject(new Error('WebSocket error'));
+                        };
+                    });
+                } catch (err) {
+                    continue;
+                }
+            }
+
+            return null;
         }
 
         async function searchProfile() {
-            const hexInput = document.getElementById('hexInput').value.trim();
-            const loading = document.getElementById('loading');
-            const error = document.getElementById('error');
-            const card = document.getElementById('businessCard');
-            const debug = document.getElementById('debug');
-
-            debug.textContent = '';
-
-            if (!hexInput) {
-                showError('Please enter a hex key');
+            const input = document.getElementById('searchInput').value.trim();
+            const resultsDiv = document.getElementById('results');
+            
+            if (!input) {
+                resultsDiv.innerHTML = '<p class="error">Please enter a hex key or npub</p>';
                 return;
             }
 
-            if (!/^[a-f0-9]{64}$/i.test(hexInput)) {
-                showError('Invalid hex format. Must be 64 characters (0-9, a-f)');
-                return;
+            resultsDiv.innerHTML = '<p class="loading">Searching...</p>';
+            
+            let hexKey = input;
+            
+            if (input.startsWith('npub1')) {
+                hexKey = decodeNpub(input);
+                if (!hexKey) {
+                    resultsDiv.innerHTML = '<p class="error">Invalid npub format</p>';
+                    return;
+                }
             }
-
-            loading.classList.add('active');
-            error.classList.remove('active');
-            card.classList.remove('active');
 
             try {
-                const hexKey = hexInput.toLowerCase();
-                logDebug('Searching for: ' + hexKey.substring(0, 16) + '...');
-
                 const profile = await fetchProfileFromRelay(hexKey);
-
+                
                 if (profile) {
-                    logDebug('Profile found!');
-                    displayProfile(hexKey, profile);
-                    card.classList.add('active');
+                    resultsDiv.innerHTML = `
+                        <div class="profile-card">
+                            ${profile.picture ? `<img src="${profile.picture}" alt="avatar" class="avatar">` : '<div class="avatar-placeholder">No Image</div>'}
+                            <div class="profile-info">
+                                <h2>${profile.name || 'Unknown'}</h2>
+                                <p class="about">${profile.about || 'No bio'}</p>
+                                <p class="pubkey"><strong>Hex:</strong> ${hexKey}</p>
+                                ${profile.nip05 ? `<p class="nip05"><strong>NIP-05:</strong> ${profile.nip05}</p>` : ''}
+                                ${profile.website ? `<p class="website"><strong>Website:</strong> ${profile.website}</p>` : ''}
+                            </div>
+                        </div>
+                    `;
                 } else {
-                    showError('Profile not found on any relay');
+                    resultsDiv.innerHTML = '<p class="error">Profile not found on any relay</p>';
                 }
             } catch (err) {
-                showError('Error: ' + err.message);
-                logDebug('Error: ' + err.message);
-                console.error(err);
-            } finally {
-                loading.classList.remove('active');
+                resultsDiv.innerHTML = '<p class="error">Error fetching profile</p>';
             }
         }
 
-async function fetchProfileFromRelay(hexKey) {
-    const relays = [
-        'wss://relay.damus.io',
-        'wss://nostr.wine',
-        'wss://nos.lol',
-        'wss://relay.nostr.band'
-    ];
-
-    for (const relayUrl of relays) {
-        try {
-            logDebug('Connecting to: ' + relayUrl);
-            
-            const ws = new WebSocket(relayUrl);
-            
-            return new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => {
-                    ws.close();
-                    reject(new Error('Timeout'));
-                }, 5000);
-
-                ws.onopen = () => {
-                    logDebug('Connected, requesting profile...');
-                    // Subscribe to metadata events for this pubkey
-                    ws.send(JSON.stringify([
-                        "REQ",
-                        "profile-" + hexKey.substring(0, 8),
-                        { kinds: [0], authors: [hexKey], limit: 1 }
-                    ]));
-                };
-
-                ws.onmessage = (event) => {
-                    const msg = JSON.parse(event.data);
-                    
-                    if (msg[0] === 'EVENT' && msg[2].kind === 0) {
-                        logDebug('Profile found!');
-                        const profile = JSON.parse(msg[2].content);
-                        clearTimeout(timeout);
-                        ws.close();
-                        resolve(profile);
-                    }
-                };
-
-                ws.onerror = (err) => {
-                    clearTimeout(timeout);
-                    ws.close();
-                    reject(err);
-                };
-            });
-        } catch (err) {
-            logDebug('Relay failed: ' + err.message);
-            continue;
-        }
-    }
-
-    logDebug('All relays exhausted');
-    return null;
-}
-        
-        function displayProfile(hexKey, profile) {
-            document.getElementById('profileName').textContent = profile.name || 'Unknown';
-            document.getElementById('profileHex').textContent = hexKey;
-            document.getElementById('profileAbout').textContent = profile.about || 'No bio available';
-            document.getElementById('profileLocation').textContent = profile.location || 'Not specified';
-            document.getElementById('profileLN').textContent = profile.lud16 || profile.lud06 || 'Not provided';
-
-            if (profile.website) {
-                document.getElementById('profileWebsite').innerHTML = `<a href="${profile.website}" target="_blank">${profile.website}</a>`;
-            } else {
-                document.getElementById('profileWebsite').textContent = 'Not provided';
-            }
-
-            if (profile.picture) {
-                document.getElementById('avatar').innerHTML = `<img src="${profile.picture}" alt="avatar" onerror="this.parentElement.innerHTML='👤'">`;
-            } else {
-                document.getElementById('avatar').textContent = '👤';
-            }
-        }
-
-        function showError(message) {
-            const error = document.getElementById('error');
-            error.textContent = message;
-            error.classList.add('active');
-            document.getElementById('businessCard').classList.remove('active');
-        }
-
-        document.getElementById('hexInput').addEventListener('keypress', (e) => {
+        document.getElementById('searchInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') searchProfile();
         });
     </script>
