@@ -297,49 +297,48 @@
             }
         }
 
-        async function fetchProfileFromRelay(hexKey) {
-            // Try multiple relay APIs
-            const apiUrl = 
-                `https://nos.today/api/v0/profiles?ids=fbfb3855d50c3786`;
-            ];
+async function fetchProfileFromRelay(hexKey) {
+    // Try multiple relay APIs
+    const relayApis = [
+        `https://nos.today/api/v0/profiles?ids=${hexKey}`
+    ];
 
-            for (const url of relayApis) {
-                try {
-                    logDebug('Trying: ' + url.substring(0, 40) + '...');
-                    const response = await fetch(url);
-                    
-                    if (response.ok) {
-                        const data = await response.json();
-                        logDebug('Response received');
-                        
-                        // Handle different API response formats
-                        let profile = null;
-                        
-                        if (data.profile) {
-                            profile = typeof data.profile.content === 'string' 
-                                ? JSON.parse(data.profile.content) 
-                                : data.profile.content;
-                        } else if (data.profiles && data.profiles[0]) {
-                            profile = typeof data.profiles[0].content === 'string'
-                                ? JSON.parse(data.profiles[0].content)
-                                : data.profiles[0].content;
-                        }
-                        
-                        if (profile) {
-                            logDebug('Profile parsed successfully');
-                            return profile;
-                        }
-                    }
-                } catch (err) {
-                    logDebug('API failed: ' + err.message);
-                    continue;
+    for (const url of relayApis) {
+        try {
+            logDebug('Trying: ' + url.substring(0, 40) + '...');
+            const response = await fetch(url);
+            
+            if (response.ok) {
+                const data = await response.json();
+                logDebug('Response received');
+                
+                // Handle different API response formats
+                let profile = null;
+                
+                if (data.profile) {
+                    profile = typeof data.profile.content === 'string' 
+                        ? JSON.parse(data.profile.content) 
+                        : data.profile.content;
+                } else if (data.profiles && data.profiles[0]) {
+                    profile = typeof data.profiles[0].content === 'string'
+                        ? JSON.parse(data.profiles[0].content)
+                        : data.profiles[0].content;
+                }
+                
+                if (profile) {
+                    logDebug('Profile parsed successfully');
+                    return profile;
                 }
             }
-
-            logDebug('All APIs exhausted');
-            return null;
+        } catch (err) {
+            logDebug('API failed: ' + err.message);
+            continue;
         }
+    }
 
+    logDebug('All APIs exhausted');
+    return null;
+}
         function displayProfile(hexKey, profile) {
             document.getElementById('profileName').textContent = profile.name || 'Unknown';
             document.getElementById('profileHex').textContent = hexKey;
