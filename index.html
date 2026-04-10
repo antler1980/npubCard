@@ -245,11 +245,13 @@
                     return null;
                 }
                 
+                // Take bytes 1-32 (skip the first checksum byte)
                 let hex = '';
-                for (let i = 1; i < 33; i++) {
+                for (let i = 1; i <= 32; i++) {
                     hex += converted[i].toString(16).padStart(2, '0');
                 }
                 
+                console.log('Decoded npub to hex:', hex);
                 return hex;
             } catch (e) {
                 console.error('Decode error:', e);
@@ -258,6 +260,8 @@
         }
 
         async function fetchProfileFromRelay(hexKey) {
+            console.log('Searching for hex key:', hexKey);
+            
             const relays = [
                 'wss://relay.damus.io',
                 'wss://nostr.wine',
@@ -294,7 +298,7 @@
                 }, 15000);
 
                 ws.onopen = () => {
-                    console.log('Connected to', relayUrl);
+                    console.log('Connected to', relayUrl, 'querying for:', hexKey);
                     ws.send(JSON.stringify([
                         "REQ",
                         "profile-" + hexKey.substring(0, 8),
@@ -305,11 +309,13 @@
                 ws.onmessage = (event) => {
                     try {
                         const msg = JSON.parse(event.data);
+                        console.log('Message from relay:', msg[0]);
                         if (msg[0] === 'EVENT' && msg[2].kind === 0 && !resolved) {
                             profileReceived = true;
                             resolved = true;
                             clearTimeout(timeout);
                             ws.close();
+                            console.log('Profile received!');
                             resolve(JSON.parse(msg[2].content));
                         }
                         if (msg[0] === 'EOSE' && !profileReceived && !resolved) {
@@ -363,7 +369,7 @@
             }
 
             if (!/^[a-f0-9]{64}$/.test(hexKey)) {
-                resultsDiv.innerHTML = '<p class="error">Invalid key format</p>';
+                resultsDiv.innerHTML = '<p class="error">Invalid key format (must be 64 hex chars). Got: ' + hexKey + '</p>';
                 return;
             }
 
@@ -387,7 +393,7 @@
                     resultsDiv.innerHTML = '<p class="error">Profile not found on any relay</p>';
                 }
             } catch (err) {
-                resultsDiv.innerHTML = '<p class="error">Error fetching profile. All relays are timing out.</p>';
+                resultsDiv.innerHTML = '<p class="error">Error fetching profile</p>';
             }
         }
 
