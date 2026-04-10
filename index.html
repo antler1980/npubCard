@@ -299,9 +299,8 @@
 
         async function fetchProfileFromRelay(hexKey) {
             // Try multiple relay APIs
-            const relayApis = [
-                `https://nostr.band/api/v0/profiles?ids=${hexKey}`,
-                `https://api.nostr.band/v0/profile/${hexKey}`
+            const apiUrl = 
+                `https://nos.today/api/v0/profiles?ids=fbfb3855d50c3786`;
             ];
 
             for (const url of relayApis) {
