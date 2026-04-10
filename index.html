@@ -298,14 +298,16 @@
         }
 
 async function fetchProfileFromRelay(hexKey) {
-    // Try multiple relay APIs
+    // Try multiple relay APIs that support profile queries
     const relayApis = [
-        `https://nos.today/api/v0/profiles?ids=${hexKey}`
+        `https://api.nostr.band/v0/profiles?ids=${hexKey}`,
+        `https://purplepag.es/api/v0/profiles?ids=${hexKey}`,
+        `https://nostr.wine/api/v0/profiles?ids=${hexKey}`
     ];
 
     for (const url of relayApis) {
         try {
-            logDebug('Trying: ' + url.substring(0, 40) + '...');
+            logDebug('Trying: ' + url.substring(0, 50) + '...');
             const response = await fetch(url);
             
             if (response.ok) {
@@ -326,7 +328,7 @@ async function fetchProfileFromRelay(hexKey) {
                 }
                 
                 if (profile) {
-                    logDebug('Profile parsed successfully');
+                    logDebug('Profile found on: ' + url.substring(0, 30));
                     return profile;
                 }
             }
