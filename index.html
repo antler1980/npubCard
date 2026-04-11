@@ -124,6 +124,18 @@
             display: block;
         }
 
+        .debug-info {
+            color: #666;
+            font-size: 12px;
+            margin-top: 10px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
         .loading {
             display: none;
             text-align: center;
@@ -311,6 +323,7 @@
                 <span class="spinner"></span>
                 <span>Loading profile...</span>
             </div>
+            <div class="debug-info" id="debugInfo"></div>
         </div>
 
         <div class="profile-card" id="profileCard">
@@ -348,18 +361,34 @@
         const RELAYS = [
             'wss://relay.damus.io',
             'wss://nos.lol',
-            'wss://nostr.wine'
+            'wss://nostr.wine',
+            'wss://relay.nostr.band'
         ];
 
         let currentProfile = null;
         let isSearching = false;
+        let debugLogs = [];
 
         // Bech32 charset
         const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
 
+        function addDebug(msg) {
+            const time = new Date().toLocaleTimeString();
+            debugLogs.push(`[${time}] ${msg}`);
+            if (debugLogs.length > 10) debugLogs.shift();
+            updateDebugInfo();
+        }
+
+        function updateDebugInfo() {
+            const debugEl = document.getElementById('debugInfo');
+            debugEl.textContent = debugLogs.join('\n');
+            debugEl.scrollTop = debugEl.scrollHeight;
+        }
+
         function npubToHex(npub) {
             try {
                 if (!npub.startsWith('npub1')) {
+                    addDebug('❌ npub does not start with npub1');
                     return null;
                 }
 
@@ -368,9 +397,11 @@
                 let value = 0;
                 const bytes = [];
 
-                for (let char of data) {
+                for (let i = 0; i < data.length; i++) {
+                    const char = data[i];
                     const index = CHARSET.indexOf(char);
                     if (index === -1) {
+                        addDebug(`❌ Invalid character in npub: ${char}`);
                         return null;
                     }
                     value = (value << 5) | index;
@@ -382,9 +413,16 @@
                     }
                 }
 
-                return bytes.map(b => b.toString(16).padStart(2, '0')).join('');
+                if (bytes.length !== 32) {
+                    addDebug(`❌ Wrong byte length: ${bytes.length} (expected 32)`);
+                    return null;
+                }
+
+                const hex = bytes.map(b => b.toString(16).padStart(2, '0')).join('');
+                addDebug(`✓ Converted npub to hex: ${hex.substring(0, 16)}...`);
+                return hex;
             } catch (e) {
-                console.error('npubToHex error:', e);
+                addDebug(`❌ npubToHex error: ${e.message}`);
                 return null;
             }
         }
@@ -416,13 +454,15 @@
 
                 return npub;
             } catch (e) {
-                console.error('hexToNpub error:', e);
+                addDebug(`❌ hexToNpub error: ${e.message}`);
                 return null;
             }
         }
 
         function showLoading() {
             document.getElementById('loading').classList.add('show');
+            debugLogs = [];
+            updateDebugInfo();
         }
 
         function hideLoading() {
@@ -454,6 +494,7 @@
                     return;
                 }
                 pubkey = hexInput.toLowerCase();
+                addDebug(`Using hex key: ${pubkey.substring(0, 16)}...`);
             } else if (npubInput) {
                 if (!npubInput.startsWith('npub1')) {
                     showError('Invalid npub format (must start with npub1)');
@@ -464,6 +505,7 @@
                     showError('Could not decode npub. Please check the format.');
                     return;
                 }
+                addDebug(`Converted npub to hex`);
             } else {
                 showError('Please enter a hex key or npub');
                 return;
@@ -475,13 +517,13 @@
         }
 
         function fetchProfile(pubkey) {
+            addDebug(`Starting search for: ${pubkey.substring(0, 16)}...`);
             let attempts = 0;
-            let maxAttempts = RELAYS.length;
 
             function tryNextRelay() {
-                if (attempts >= maxAttempts) {
+                if (attempts >= RELAYS.length) {
                     hideLoading();
-                    showError('Could not fetch profile. Please try again.');
+                    showError('Profile not found on any relay. It may not exist or be private.');
                     isSearching = false;
                     return;
                 }
@@ -489,20 +531,22 @@
                 const relay = RELAYS[attempts];
                 attempts++;
 
-                console.log(`Attempting relay ${attempts}/${maxAttempts}: ${relay}`);
+                addDebug(`Trying relay ${attempts}/${RELAYS.length}: ${relay}`);
 
                 fetchFromRelay(relay, pubkey)
                     .then(profile => {
                         if (profile) {
+                            addDebug(`✓ Profile found!`);
                             hideLoading();
                             displayProfile(pubkey, profile);
                             isSearching = false;
                         } else {
+                            addDebug(`No profile on this relay`);
                             tryNextRelay();
                         }
                     })
                     .catch(error => {
-                        console.error(`Error with relay ${relay}:`, error);
+                        addDebug(`Error: ${error.message}`);
                         tryNextRelay();
                     });
             }
@@ -522,47 +566,52 @@
                     timeout = setTimeout(() => {
                         if (!resolved) {
                             resolved = true;
-                            if (ws) {
+                            addDebug(`Timeout on ${relayUrl}`);
+                            if (ws && ws.readyState === WebSocket.OPEN) {
                                 ws.close();
                             }
                             resolve(null);
                         }
-                    }, 4000);
+                    }, 5000);
 
                     ws.onopen = () => {
-                        const sub = ['REQ', 'profile-' + Math.random(), { kinds: [0], authors: [pubkey] }];
-                        try {
-                            ws.send(JSON.stringify(sub));
-                        } catch (e) {
-                            console.error('Error sending request:', e);
-                            resolve(null);
-                        }
+                        addDebug(`Connected to ${relayUrl}`);
+                        const subId = 'p' + Math.random().toString(36).substring(7);
+                        const filter = { kinds: [0], authors: [pubkey] };
+                        const request = JSON.stringify(['REQ', subId, filter]);
+                        addDebug(`Sending filter request`);
+                        ws.send(request);
                     };
 
                     ws.onmessage = (event) => {
                         try {
                             const message = JSON.parse(event.data);
 
-                            if (message[0] === 'EVENT' && message[2].kind === 0 && !resolved) {
-                                resolved = true;
-                                clearTimeout(timeout);
-                                ws.close();
+                            if (message[0] === 'EVENT' && !resolved) {
+                                const evt = message[2];
+                                if (evt.kind === 0) {
+                                    resolved = true;
+                                    clearTimeout(timeout);
+                                    if (ws) ws.close();
 
-                                try {
-                                    const profile = JSON.parse(message[2].content);
-                                    resolve(profile);
-                                } catch (e) {
-                                    console.error('Error parsing profile:', e);
-                                    resolve({});
+                                    try {
+                                        const profile = JSON.parse(evt.content);
+                                        resolve(profile);
+                                    } catch (parseErr) {
+                                        addDebug(`Parse error: ${parseErr.message}`);
+                                        resolve({});
+                                    }
                                 }
+                            } else if (message[0] === 'EOSE') {
+                                addDebug(`EOSE received from relay`);
                             }
                         } catch (e) {
-                            console.error('Error parsing message:', e);
+                            addDebug(`Message parse error: ${e.message}`);
                         }
                     };
 
                     ws.onerror = (error) => {
-                        console.error('WebSocket error:', error);
+                        addDebug(`WebSocket error`);
                         if (!resolved) {
                             resolved = true;
                             clearTimeout(timeout);
@@ -578,15 +627,14 @@
                         }
                     };
                 } catch (e) {
-                    console.error('WebSocket creation error:', e);
                     clearTimeout(timeout);
+                    addDebug(`Connection error: ${e.message}`);
                     reject(e);
                 }
             });
         }
 
         function displayProfile(pubkey, profile) {
-            // Clear inputs
             document.getElementById('hexInput').value = '';
             document.getElementById('npubInput').value = '';
             document.getElementById('searchSection').classList.add('hide');
@@ -646,7 +694,6 @@
             }
         }
 
-        // Event listeners
         document.getElementById('hexInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') searchProfile();
         });
