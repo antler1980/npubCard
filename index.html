@@ -114,6 +114,10 @@
             background: #e0e0e0;
             flex-shrink: 0;
             overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
         }
 
         .profile-avatar img {
@@ -140,6 +144,7 @@
             line-height: 1.6;
             margin-bottom: 15px;
             word-break: break-word;
+            white-space: pre-wrap;
         }
 
         .profile-stats {
@@ -281,8 +286,8 @@
 
         <div class="profile-card" id="profileCard">
             <div class="profile-header">
-                <div class="profile-avatar">
-                    <img id="avatar" src="" alt="Profile avatar">
+                <div class="profile-avatar" id="avatarContainer">
+                    👤
                 </div>
                 <div class="profile-info">
                     <h2 id="displayName">Name</h2>
@@ -315,12 +320,78 @@
         const RELAY_URLS = [
             'wss://relay.damus.io',
             'wss://nos.lol',
-            'wss://relay.nostr.band',
-            'wss://relay.snort.social'
+            'wss://nostr.wine'
         ];
 
+        const CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
         let currentProfile = null;
         let webSockets = [];
+
+        // Bech32 decode function
+        function bech32Decode(bech) {
+            const bechLower = bech.toLowerCase();
+            const pos = bechLower.lastIndexOf('1');
+            
+            if (pos < 1 || pos + 7 > bechLower.length) {
+                return null;
+            }
+            
+            const hrp = bechLower.substring(0, pos);
+            const data = [];
+            for (let i = pos + 1; i < bechLower.length; i++) {
+                const idx = CHARSET.indexOf(bechLower[i]);
+                if (idx < 0) {
+                    return null;
+                }
+                data.push(idx);
+            }
+            
+            return { hrp, data };
+        }
+
+        // Convert bits function
+        function convertBits(data, fromBits, toBits) {
+            let acc = 0;
+            let bits = 0;
+            const ret = [];
+            const maxv = (1 << toBits) - 1;
+            
+            for (let i = 0; i < data.length; i++) {
+                acc = (acc << fromBits) | data[i];
+                bits += fromBits;
+                while (bits >= toBits) {
+                    bits -= toBits;
+                    ret.push((acc >> bits) & maxv);
+                }
+            }
+            
+            return ret;
+        }
+
+        // Convert npub to hex
+        function npubToHex(npub) {
+            try {
+                const decoded = bech32Decode(npub);
+                if (!decoded || decoded.hrp !== 'npub') {
+                    return null;
+                }
+                
+                const converted = convertBits(decoded.data, 5, 8);
+                if (!converted || converted.length < 32) {
+                    return null;
+                }
+                
+                let hex = '';
+                for (let i = 0; i < 32; i++) {
+                    hex += converted[i].toString(16).padStart(2, '0');
+                }
+                
+                return hex;
+            } catch (e) {
+                console.error('Decode error:', e);
+                return null;
+            }
+        }
 
         function showError(message) {
             const errorEl = document.getElementById('errorMessage');
@@ -344,23 +415,12 @@
         function closeWebSockets() {
             webSockets.forEach(ws => {
                 try {
-                    ws.close();
+                    if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+                        ws.close();
+                    }
                 } catch (e) {}
             });
             webSockets = [];
-        }
-
-        function convertNpubToHex(npub) {
-            try {
-                const decoded = bech32.decode(npub);
-                if (decoded.prefix !== 'npub') {
-                    throw new Error('Invalid npub format');
-                }
-                const hex = Buffer.from(bech32.fromWords(decoded.words)).toString('hex');
-                return hex;
-            } catch (e) {
-                return null;
-            }
         }
 
         function isValidHex(hex) {
@@ -372,23 +432,26 @@
             const hexInput = document.getElementById('hexInput').value.trim();
             const npubInput = document.getElementById('npubInput').value.trim();
 
-            let pubkey = hexInput || npubInput;
+            let pubkey = null;
 
-            if (!pubkey) {
-                showError('Please enter a hex key or npub address');
-                return;
-            }
-
-            if (npubInput && npubInput.startsWith('npub1')) {
-                pubkey = convertNpubToHex(npubInput);
-                if (!pubkey) {
-                    showError('Invalid npub format');
+            if (hexInput) {
+                if (!isValidHex(hexInput)) {
+                    showError('Invalid hex key format (must be 64 characters)');
                     return;
                 }
-            }
-
-            if (!isValidHex(pubkey)) {
-                showError('Invalid hex key format (must be 64 characters)');
+                pubkey = hexInput.toLowerCase();
+            } else if (npubInput) {
+                if (!npubInput.startsWith('npub1')) {
+                    showError('Invalid npub format (must start with npub1)');
+                    return;
+                }
+                pubkey = npubToHex(npubInput);
+                if (!pubkey) {
+                    showError('Invalid npub format. Please check and try again.');
+                    return;
+                }
+            } else {
+                showError('Please enter a hex key or npub address');
                 return;
             }
 
@@ -401,16 +464,23 @@
 
         function fetchProfile(pubkey) {
             let profileFound = false;
-            let contactsFound = false;
-            const profileData = {};
+            let relayConnected = 0;
 
             RELAY_URLS.forEach(relayUrl => {
                 try {
                     const ws = new WebSocket(relayUrl);
+                    let timeout;
 
                     ws.onopen = () => {
-                        const sub = ['REQ', 'profile-' + pubkey, { authors: [pubkey], kinds: [0, 3] }];
+                        relayConnected++;
+                        const sub = ['REQ', 'profile-' + Math.random(), { authors: [pubkey], kinds: [0, 3] }];
                         ws.send(JSON.stringify(sub));
+
+                        timeout = setTimeout(() => {
+                            try {
+                                ws.close();
+                            } catch (e) {}
+                        }, 3000);
                     };
 
                     ws.onmessage = (event) => {
@@ -418,24 +488,16 @@
                             const message = JSON.parse(event.data);
 
                             if (message[0] === 'EVENT') {
-                                const event = message[2];
-                                if (event.kind === 0 && !profileFound) {
+                                const eventData = message[2];
+                                if (eventData.kind === 0 && !profileFound) {
                                     profileFound = true;
+                                    clearTimeout(timeout);
                                     try {
-                                        profileData.profile = JSON.parse(event.content);
+                                        const profile = JSON.parse(eventData.content);
+                                        displayProfile(pubkey, profile, eventData.tags);
                                     } catch (e) {
-                                        profileData.profile = {};
+                                        displayProfile(pubkey, {}, eventData.tags);
                                     }
-                                }
-                                if (event.kind === 3 && !contactsFound) {
-                                    contactsFound = true;
-                                    profileData.contacts = event.tags;
-                                }
-                            }
-
-                            if ((profileFound || contactsFound) && message[0] === 'EOSE') {
-                                if (profileData.profile || profileData.contacts) {
-                                    displayProfile(pubkey, profileData);
                                     closeWebSockets();
                                 }
                             }
@@ -448,6 +510,10 @@
                         console.error('WebSocket error for relay:', relayUrl);
                     };
 
+                    ws.onclose = () => {
+                        clearTimeout(timeout);
+                    };
+
                     webSockets.push(ws);
                 } catch (e) {
                     console.error('Error connecting to relay:', relayUrl, e);
@@ -456,37 +522,40 @@
 
             setTimeout(() => {
                 hideLoading();
-                if (!profileFound && !contactsFound) {
+                if (!profileFound && relayConnected === 0) {
+                    showError('Could not connect to any relay. Try again later.');
+                } else if (!profileFound) {
                     showError('Profile not found. Try another pubkey.');
                 }
-            }, 5000);
+            }, 4000);
         }
 
-        function displayProfile(pubkey, data) {
+        function displayProfile(pubkey, profile, tags) {
             hideLoading();
-            const profile = data.profile || {};
-            const contacts = data.contacts || [];
+
+            const displayName = profile.display_name || profile.name || 'Unknown User';
+            const username = profile.name || pubkey.substring(0, 8);
+            const about = profile.about || 'No bio available';
+            const picture = profile.picture;
 
             currentProfile = {
                 pubkey: pubkey,
                 ...profile
             };
 
-            const displayName = profile.display_name || profile.name || 'Unknown User';
-            const username = profile.name || 'no-username';
-            const about = profile.about || 'No bio available';
-            const picture = profile.picture || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22%3E%3Crect fill=%22%23ccc%22 width=%22100%22 height=%22100%22/%3E%3C/svg%3E';
-
             document.getElementById('displayName').textContent = displayName;
             document.getElementById('username').textContent = '@' + username;
             document.getElementById('pubkey').textContent = 'pubkey: ' + pubkey;
             document.getElementById('about').textContent = about;
-            document.getElementById('avatar').src = picture;
-            document.getElementById('avatar').onerror = function() {
-                this.style.display = 'none';
-            };
 
-            const followers = contacts.length;
+            const avatarContainer = document.getElementById('avatarContainer');
+            if (picture) {
+                avatarContainer.innerHTML = `<img src="${picture}" alt="avatar" onerror="this.parentElement.innerHTML='👤'">`;
+            } else {
+                avatarContainer.innerHTML = '👤';
+            }
+
+            const followers = tags ? tags.filter(t => t[0] === 'p').length : 0;
             document.getElementById('followers').textContent = followers;
             document.getElementById('following').textContent = '0';
             document.getElementById('posts').textContent = '0';
