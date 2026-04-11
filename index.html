@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nostr Business Card</title>
+    <title>Nostr Profile Search</title>
     <style>
         * {
             margin: 0;
@@ -12,7 +12,7 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
@@ -22,45 +22,52 @@
         }
 
         .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            padding: 40px;
+            max-width: 600px;
             width: 100%;
-            max-width: 900px;
-            padding: 40px 20px;
         }
 
         h1 {
             text-align: center;
-            color: white;
+            color: #333;
             margin-bottom: 30px;
             font-size: 28px;
         }
 
-        .search-box {
-            display: flex;
-            gap: 10px;
+        .search-section {
             margin-bottom: 30px;
         }
 
-        #searchInput {
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        input[type="text"] {
             flex: 1;
-            padding: 12px 16px;
+            padding: 12px 15px;
             border: 2px solid #e0e0e0;
             border-radius: 8px;
-            font-size: 16px;
+            font-size: 14px;
             transition: border-color 0.3s;
         }
 
-        #searchInput:focus {
+        input[type="text"]:focus {
             outline: none;
             border-color: #667eea;
         }
 
         button {
-            padding: 12px 25px;
-            background: white;
-            color: #667eea;
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
             border: none;
             border-radius: 8px;
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 600;
             cursor: pointer;
             transition: transform 0.2s, box-shadow 0.2s;
@@ -68,731 +75,450 @@
 
         button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
         }
 
         button:active {
             transform: translateY(0);
         }
 
-        #results {
-            min-height: 100px;
+        .divider {
+            text-align: center;
+            color: #999;
+            margin: 20px 0;
+            font-size: 14px;
         }
 
         .profile-card {
-            max-width: 900px;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            background: white;
-            margin-bottom: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            display: none;
         }
 
-        .profile-card.active {
+        .profile-card.show {
             display: block;
         }
 
         .profile-header {
-            height: 150px;
-            background-size: cover;
-            background-position: center;
-            background-color: #e0e0e0;
-            position: relative;
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
         }
 
-        .profile-picture {
-            width: 100px;
-            height: 100px;
+        .profile-avatar {
+            width: 80px;
+            height: 80px;
             border-radius: 50%;
-            border: 4px solid white;
-            position: absolute;
-            bottom: -50px;
-            left: 20px;
+            background: #e0e0e0;
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+
+        .profile-avatar img {
+            width: 100%;
+            height: 100%;
             object-fit: cover;
         }
 
-        .profile-picture-placeholder {
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            border: 4px solid white;
-            position: absolute;
-            bottom: -50px;
-            left: 20px;
-            background: #ccc;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 40px;
-        }
-
-        .profile-content {
-            padding: 60px 20px 20px 20px;
-        }
-
-        .profile-content h2 {
-            margin: 0 0 5px 0;
-            font-size: 24px;
+        .profile-info h2 {
             color: #333;
+            margin-bottom: 5px;
+            word-break: break-word;
         }
 
-        .nip05 {
-            color: #4CAF50;
-            font-size: 14px;
-            margin: 5px 0 15px 0;
-            font-weight: 500;
-        }
-
-        .about {
+        .profile-info p {
             color: #666;
+            font-size: 13px;
+            margin-bottom: 8px;
+            word-break: break-word;
+        }
+
+        .profile-about {
+            color: #555;
             line-height: 1.6;
-            margin: 15px 0;
-            font-size: 14px;
-            white-space: pre-wrap;
-            word-wrap: break-word;
+            margin-bottom: 15px;
+            word-break: break-word;
         }
 
         .profile-stats {
-            display: flex;
-            gap: 30px;
-            margin: 20px 0;
-            padding: 20px 0;
-            border-top: 1px solid #eee;
-            border-bottom: 1px solid #eee;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 15px;
         }
 
         .stat {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            text-align: center;
         }
 
         .stat-value {
             font-size: 20px;
-            font-weight: bold;
-            color: #333;
+            font-weight: 700;
+            color: #667eea;
         }
 
         .stat-label {
             font-size: 12px;
             color: #999;
-            text-transform: uppercase;
             margin-top: 5px;
         }
 
-        .profile-links {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin: 20px 0;
-        }
-
-        .profile-links a,
-        .profile-links p {
-            display: inline-block;
-            padding: 8px 12px;
-            background: #f0f0f0;
-            border-radius: 6px;
-            text-decoration: none;
-            color: #333;
-            font-size: 13px;
-            transition: background 0.3s;
-            margin: 0;
-        }
-
-        .profile-links a:hover {
-            background: #e0e0e0;
-        }
-
-        .pubkey-section {
-            font-size: 12px;
-            color: #999;
-            margin-top: 15px;
-            word-break: break-all;
-        }
-
-        .pubkey-section code {
-            background: #f5f5f5;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-family: monospace;
-            display: block;
-            margin-top: 5px;
-        }
-
-        .all-fields {
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 2px solid #eee;
-        }
-
-        .all-fields h3 {
-            font-size: 18px;
-            color: #333;
-            margin-bottom: 15px;
-        }
-
-        .field-table {
-            width: 100%;
-            border-collapse: collapse;
-            background: white;
-        }
-
-        .field-table tr {
-            border-bottom: 1px solid #eee;
-        }
-
-        .field-table tr:hover {
-            background: #f9f9f9;
-        }
-
-        .field-table td {
+        .error-message {
+            color: #d32f2f;
+            background: #ffebee;
             padding: 12px;
-            vertical-align: top;
+            border-radius: 8px;
+            margin-top: 15px;
+            display: none;
         }
 
-        .field-table td:first-child {
-            font-weight: 600;
-            color: #667eea;
-            width: 200px;
-        }
-
-        .field-table td:last-child {
-            color: #555;
-            word-break: break-all;
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
+        .error-message.show {
+            display: block;
         }
 
         .loading {
             text-align: center;
-            padding: 20px;
-            border-radius: 8px;
-            font-size: 16px;
-            color: white;
-            background: rgba(255, 255, 255, 0.2);
+            color: #667eea;
+            font-size: 14px;
+            margin-top: 15px;
+            display: none;
         }
 
-        .error {
-            text-align: center;
-            padding: 20px;
-            border-radius: 8px;
-            font-size: 16px;
-            color: #d32f2f;
-            background: #ffebee;
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #e0e0e0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .copy-button {
+            padding: 6px 12px;
+            font-size: 12px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+
+        .copy-button:hover {
+            background: #764ba2;
         }
 
         @media (max-width: 600px) {
-            h1 {
-                font-size: 22px;
+            .container {
+                padding: 20px;
             }
 
-            .search-box {
+            h1 {
+                font-size: 22px;
+                margin-bottom: 20px;
+            }
+
+            .input-group {
                 flex-direction: column;
             }
 
-            button {
-                width: 100%;
+            .profile-header {
+                flex-direction: column;
+                align-items: center;
+                text-align: center;
             }
 
             .profile-stats {
-                gap: 20px;
-            }
-
-            .field-table td:first-child {
-                width: 100px;
-                font-size: 12px;
+                grid-template-columns: repeat(2, 1fr);
             }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🔍 Nostr Profile Card</h1>
-        
-        <div class="search-box">
-            <input 
-                type="text" 
-                id="hexInput" 
-                placeholder="Enter hex key (64 characters) or npub1..."
-            >
-            <button onclick="searchProfile()">Search</button>
+        <h1>🔍 Nostr Profile Search</h1>
+
+        <div class="search-section">
+            <div class="input-group">
+                <input 
+                    type="text" 
+                    id="hexInput" 
+                    placeholder="Enter hex key (64 characters)..."
+                >
+                <button onclick="searchProfile()">Search</button>
+            </div>
+
+            <div class="divider">OR</div>
+
+            <div class="input-group">
+                <input 
+                    type="text" 
+                    id="npubInput" 
+                    placeholder="Enter npub1..."
+                >
+                <button onclick="searchProfile()">Search</button>
+            </div>
         </div>
 
-        <div id="results"></div>
+        <div class="loading" id="loading">
+            <span class="spinner"></span>Loading profile...
+        </div>
+
+        <div class="error-message" id="errorMessage"></div>
+
+        <div class="profile-card" id="profileCard">
+            <div class="profile-header">
+                <div class="profile-avatar">
+                    <img id="avatar" src="" alt="Profile avatar">
+                </div>
+                <div class="profile-info">
+                    <h2 id="displayName">Name</h2>
+                    <p id="username">@username</p>
+                    <p id="pubkey" style="font-size: 11px; font-family: monospace; word-break: break-all;"></p>
+                    <button class="copy-button" onclick="copyToClipboard()">Copy pubkey</button>
+                </div>
+            </div>
+
+            <div class="profile-about" id="about"></div>
+
+            <div class="profile-stats">
+                <div class="stat">
+                    <div class="stat-value" id="followers">0</div>
+                    <div class="stat-label">Followers</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="following">0</div>
+                    <div class="stat-label">Following</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="posts">0</div>
+                    <div class="stat-label">Posts</div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
-        const CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
-        const RELAYS = [
-            'wss://nos.lol',
-            'wss://nostr.wine',
+        const RELAY_URLS = [
             'wss://relay.damus.io',
-            'wss://relay.nostr.band'
+            'wss://nos.lol',
+            'wss://relay.nostr.band',
+            'wss://relay.snort.social'
         ];
 
-        function bech32Decode(bech) {
-            const bechLower = bech.toLowerCase();
-            const pos = bechLower.lastIndexOf('1');
-            
-            if (pos < 1 || pos + 7 > bechLower.length) {
-                return null;
-            }
-            
-            const hrp = bechLower.substring(0, pos);
-            const data = [];
-            for (let i = pos + 1; i < bechLower.length; i++) {
-                const idx = CHARSET.indexOf(bechLower[i]);
-                if (idx < 0) {
-                    return null;
-                }
-                data.push(idx);
-            }
-            
-            return { hrp, data };
+        let currentProfile = null;
+        let webSockets = [];
+
+        function showError(message) {
+            const errorEl = document.getElementById('errorMessage');
+            errorEl.textContent = message;
+            errorEl.classList.add('show');
         }
 
-        function convertBits(data, fromBits, toBits) {
-            let acc = 0;
-            let bits = 0;
-            const ret = [];
-            const maxv = (1 << toBits) - 1;
-            
-            for (let i = 0; i < data.length; i++) {
-                acc = (acc << fromBits) | data[i];
-                bits += fromBits;
-                while (bits >= toBits) {
-                    bits -= toBits;
-                    ret.push((acc >> bits) & maxv);
-                }
-            }
-            
-            return ret;
+        function hideError() {
+            const errorEl = document.getElementById('errorMessage');
+            errorEl.classList.remove('show');
         }
 
-        function decodeNpub(npub) {
+        function showLoading() {
+            document.getElementById('loading').classList.add('show');
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').classList.remove('show');
+        }
+
+        function closeWebSockets() {
+            webSockets.forEach(ws => {
+                try {
+                    ws.close();
+                } catch (e) {}
+            });
+            webSockets = [];
+        }
+
+        function convertNpubToHex(npub) {
             try {
-                const decoded = bech32Decode(npub);
-                if (!decoded || decoded.hrp !== 'npub') {
-                    return null;
+                const decoded = bech32.decode(npub);
+                if (decoded.prefix !== 'npub') {
+                    throw new Error('Invalid npub format');
                 }
-                
-                const converted = convertBits(decoded.data, 5, 8);
-                if (!converted || converted.length < 32) {
-                    return null;
-                }
-                
-                let hex = '';
-                for (let i = 0; i < 32; i++) {
-                    hex += converted[i].toString(16).padStart(2, '0');
-                }
-                
+                const hex = Buffer.from(bech32.fromWords(decoded.words)).toString('hex');
                 return hex;
             } catch (e) {
-                console.error('Decode error:', e);
                 return null;
             }
         }
 
-        function hexToNpub(hex) {
-            try {
-                const bytes = [];
-                for (let i = 0; i < hex.length; i += 2) {
-                    bytes.push(parseInt(hex.substr(i, 2), 16));
+        function isValidHex(hex) {
+            return /^[0-9a-fA-F]{64}$/.test(hex);
+        }
+
+        function searchProfile() {
+            hideError();
+            const hexInput = document.getElementById('hexInput').value.trim();
+            const npubInput = document.getElementById('npubInput').value.trim();
+
+            let pubkey = hexInput || npubInput;
+
+            if (!pubkey) {
+                showError('Please enter a hex key or npub address');
+                return;
+            }
+
+            if (npubInput && npubInput.startsWith('npub1')) {
+                pubkey = convertNpubToHex(npubInput);
+                if (!pubkey) {
+                    showError('Invalid npub format');
+                    return;
                 }
-                const converted = convertBits(bytes, 8, 5);
-                let npub = 'npub1';
-                for (let i = 0; i < converted.length; i++) {
-                    npub += CHARSET[converted[i]];
-                }
-                return npub;
-            } catch (e) {
-                console.error('Encode error:', e);
-                return null;
             }
+
+            if (!isValidHex(pubkey)) {
+                showError('Invalid hex key format (must be 64 characters)');
+                return;
+            }
+
+            closeWebSockets();
+            showLoading();
+            document.getElementById('profileCard').classList.remove('show');
+
+            fetchProfile(pubkey);
         }
 
-        function escapeHtml(text) {
-            const map = {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#039;'
-            };
-            return text.replace(/[&<>"']/g, m => map[m]);
-        }
+        function fetchProfile(pubkey) {
+            let profileFound = false;
+            let contactsFound = false;
+            const profileData = {};
 
-        function formatValue(value) {
-            if (value === null || value === undefined) {
-                return "(empty)";
-            }
-            if (typeof value === "object") {
-                return JSON.stringify(value, null, 2);
-            }
-            return String(value);
-        }
-
-        async function fetchEventFromRelay(relayUrl, hexKey, eventKind) {
-            return new Promise((resolve) => {
+            RELAY_URLS.forEach(relayUrl => {
                 try {
                     const ws = new WebSocket(relayUrl);
-                    let resolved = false;
-                    const subscriptionId = `query-${Math.random().toString(36).substring(2, 9)}`;
-
-                    const timeout = setTimeout(() => {
-                        if (!resolved) {
-                            resolved = true;
-                            ws.close();
-                            resolve(null);
-                        }
-                    }, 5000);
 
                     ws.onopen = () => {
-                        ws.send(JSON.stringify([
-                            "REQ",
-                            subscriptionId,
-                            { kinds: [eventKind], authors: [hexKey], limit: 1 }
-                        ]));
+                        const sub = ['REQ', 'profile-' + pubkey, { authors: [pubkey], kinds: [0, 3] }];
+                        ws.send(JSON.stringify(sub));
                     };
 
                     ws.onmessage = (event) => {
                         try {
-                            const msg = JSON.parse(event.data);
-                            
-                            if (msg[0] === 'EVENT' && msg[2].kind === eventKind && !resolved) {
-                                resolved = true;
-                                clearTimeout(timeout);
-                                ws.close();
-                                resolve(msg[2]);
+                            const message = JSON.parse(event.data);
+
+                            if (message[0] === 'EVENT') {
+                                const event = message[2];
+                                if (event.kind === 0 && !profileFound) {
+                                    profileFound = true;
+                                    try {
+                                        profileData.profile = JSON.parse(event.content);
+                                    } catch (e) {
+                                        profileData.profile = {};
+                                    }
+                                }
+                                if (event.kind === 3 && !contactsFound) {
+                                    contactsFound = true;
+                                    profileData.contacts = event.tags;
+                                }
                             }
-                        } catch (err) {
-                            console.error('Parse error:', err);
+
+                            if ((profileFound || contactsFound) && message[0] === 'EOSE') {
+                                if (profileData.profile || profileData.contacts) {
+                                    displayProfile(pubkey, profileData);
+                                    closeWebSockets();
+                                }
+                            }
+                        } catch (e) {
+                            console.error('Error parsing message:', e);
                         }
                     };
 
                     ws.onerror = () => {
-                        if (!resolved) {
-                            resolved = true;
-                            clearTimeout(timeout);
-                            ws.close();
-                            resolve(null);
-                        }
+                        console.error('WebSocket error for relay:', relayUrl);
                     };
 
-                    ws.onclose = () => {
-                        if (!resolved) {
-                            resolved = true;
-                            clearTimeout(timeout);
-                            resolve(null);
-                        }
-                    };
-                } catch (err) {
-                    resolve(null);
+                    webSockets.push(ws);
+                } catch (e) {
+                    console.error('Error connecting to relay:', relayUrl, e);
                 }
+            });
+
+            setTimeout(() => {
+                hideLoading();
+                if (!profileFound && !contactsFound) {
+                    showError('Profile not found. Try another pubkey.');
+                }
+            }, 5000);
+        }
+
+        function displayProfile(pubkey, data) {
+            hideLoading();
+            const profile = data.profile || {};
+            const contacts = data.contacts || [];
+
+            currentProfile = {
+                pubkey: pubkey,
+                ...profile
+            };
+
+            const displayName = profile.display_name || profile.name || 'Unknown User';
+            const username = profile.name || 'no-username';
+            const about = profile.about || 'No bio available';
+            const picture = profile.picture || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22%3E%3Crect fill=%22%23ccc%22 width=%22100%22 height=%22100%22/%3E%3C/svg%3E';
+
+            document.getElementById('displayName').textContent = displayName;
+            document.getElementById('username').textContent = '@' + username;
+            document.getElementById('pubkey').textContent = 'pubkey: ' + pubkey;
+            document.getElementById('about').textContent = about;
+            document.getElementById('avatar').src = picture;
+            document.getElementById('avatar').onerror = function() {
+                this.style.display = 'none';
+            };
+
+            const followers = contacts.length;
+            document.getElementById('followers').textContent = followers;
+            document.getElementById('following').textContent = '0';
+            document.getElementById('posts').textContent = '0';
+
+            document.getElementById('profileCard').classList.add('show');
+        }
+
+        function copyToClipboard() {
+            if (!currentProfile) return;
+            const pubkey = currentProfile.pubkey;
+            navigator.clipboard.writeText(pubkey).then(() => {
+                alert('Pubkey copied to clipboard!');
+            }).catch(() => {
+                alert('Failed to copy pubkey');
             });
         }
 
-        async function fetchFollowersFromRelays(hexKey) {
-            const followers = new Set();
-
-            for (const relayUrl of RELAYS) {
-                const result = await new Promise((resolve) => {
-                    try {
-                        const ws = new WebSocket(relayUrl);
-                        let resolved = false;
-                        const subscriptionId = `followers-${Math.random().toString(36).substring(2, 9)}`;
-                        const followers = [];
-                        let eoseReceived = false;
-
-                        const timeout = setTimeout(() => {
-                            if (!resolved) {
-                                resolved = true;
-                                ws.close();
-                                resolve(followers);
-                            }
-                        }, 5000);
-
-                        ws.onopen = () => {
-                            ws.send(JSON.stringify([
-                                "REQ",
-                                subscriptionId,
-                                {
-                                    kinds: [3],
-                                    tags: { p: [hexKey] }
-                                }
-                            ]));
-                        };
-
-                        ws.onmessage = (event) => {
-                            try {
-                                const msg = JSON.parse(event.data);
-                                
-                                if (msg[0] === 'EVENT' && msg[2].kind === 3) {
-                                    followers.push(msg[2].pubkey);
-                                } else if (msg[0] === 'EOSE') {
-                                    eoseReceived = true;
-                                    if (!resolved) {
-                                        resolved = true;
-                                        clearTimeout(timeout);
-                                        ws.close();
-                                        resolve(followers);
-                                    }
-                                }
-                            } catch (err) {
-                                console.error('Parse error:', err);
-                            }
-                        };
-
-                        ws.onerror = () => {
-                            clearTimeout(timeout);
-                            ws.close();
-                            if (!resolved) {
-                                resolved = true;
-                                resolve(followers);
-                            }
-                        };
-
-                        ws.onclose = () => {
-                            clearTimeout(timeout);
-                            if (!resolved) {
-                                resolved = true;
-                                resolve(followers);
-                            }
-                        };
-                    } catch (err) {
-                        resolve([]);
-                    }
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            const hexInput = document.getElementById('hexInput');
+            if (hexInput) {
+                hexInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') searchProfile();
                 });
-
-                result.forEach(f => followers.add(f));
             }
 
-            return Array.from(followers);
-        }
-
-        async function fetchProfileData(hexKey) {
-            const profile = {
-                pubkey: hexKey,
-                name: null,
-                about: null,
-                picture: null,
-                banner: null,
-                website: null,
-                nip05: null,
-                lud06: null,
-                lud16: null,
-                twitter: null,
-                github: null,
-                nostr: null,
-                followers: 0,
-                following: 0
-            };
-
-            try {
-                // Fetch profile metadata (kind 0)
-                for (const relayUrl of RELAYS) {
-                    const profileData = await fetchEventFromRelay(relayUrl, hexKey, 0);
-                    if (profileData && profileData.content) {
-                        try {
-                            const metadata = JSON.parse(profileData.content);
-                            Object.assign(profile, metadata);
-                            break;
-                        } catch (e) {
-                            console.error('Error parsing profile:', e);
-                        }
-                    }
-                }
-
-                // Fetch contacts/following (kind 3)
-                for (const relayUrl of RELAYS) {
-                    const contactsData = await fetchEventFromRelay(relayUrl, hexKey, 3);
-                    if (contactsData && contactsData.tags) {
-                        profile.following = contactsData.tags.filter(tag => tag[0] === 'p').length;
-                        break;
-                    }
-                }
-
-                // Fetch followers
-                logDebug('Fetching followers...');
-                const followersList = await fetchFollowersFromRelays(hexKey);
-                profile.followers = followersList.length;
-                logDebug('Followers found: ' + profile.followers);
-
-                return profile;
-            } catch (error) {
-                console.error('Error fetching profile data:', error);
-                return profile;
+            const npubInput = document.getElementById('npubInput');
+            if (npubInput) {
+                npubInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') searchProfile();
+                });
             }
-        }
-
-        function logDebug(msg) {
-            const debug = document.getElementById('debug');
-            if (debug) {
-                debug.textContent += msg + '\n';
-            }
-        }
-
-        async function searchProfile() {
-            const input = document.getElementById('hexInput').value.trim();
-            const loading = document.getElementById('loading');
-            const error = document.getElementById('error');
-            const card = document.getElementById('businessCard');
-
-            if (!input) {
-                showError('Please enter a hex key or npub');
-                return;
-            }
-
-            loading.classList.add('active');
-            error.classList.remove('active');
-            card.classList.remove('active');
-
-            try {
-                let hexKey;
-
-                if (input.startsWith('npub1')) {
-                    hexKey = npubToHex(input);
-                    if (!hexKey) {
-                        showError('Invalid npub format');
-                        loading.classList.remove('active');
-                        return;
-                    }
-                } else if (/^[a-f0-9]{64}$/i.test(input)) {
-                    hexKey = input.toLowerCase();
-                } else {
-                    showError('Invalid format. Use npub1... or 64-char hex');
-                    loading.classList.remove('active');
-                    return;
-                }
-
-                const profile = await fetchProfileData(hexKey);
-
-                if (profile.name || profile.about || profile.picture) {
-                    displayProfile(hexKey, profile);
-                    card.classList.add('active');
-                } else {
-                    showError('Profile not found on relays');
-                }
-            } catch (err) {
-                showError('Error: ' + err.message);
-            } finally {
-                loading.classList.remove('active');
-            }
-        }
-
-        function displayProfile(hexKey, profile) {
-            const card = document.getElementById('businessCard');
-            
-            const fieldsToHide = ['banner', 'picture', 'pubkey'];
-            const filteredFields = Object.keys(profile)
-                .filter(key => !fieldsToHide.includes(key))
-                .sort();
-
-            const npub = hexToNpub(hexKey);
-
-            card.innerHTML = `
-                <div class="profile-header" style="background-image: ${profile.banner ? `url('${profile.banner}')` : 'none'}; background-color: #e0e0e0;">
-                    <div class="avatar" id="avatar">
-                        ${profile.picture ? `<img src="${profile.picture}" alt="avatar" onerror="this.parentElement.innerHTML='👤'">` : '👤'}
-                    </div>
-                </div>
-                <div class="profile-content">
-                    <h2>${escapeHtml(profile.name || 'Unknown User')}</h2>
-                    ${profile.nip05 ? `<p class="nip05">✓ ${escapeHtml(profile.nip05)}</p>` : ''}
-                    ${profile.about ? `<p class="about">${escapeHtml(profile.about)}</p>` : ''}
-                    
-                    <div class="profile-stats">
-                        <div class="stat">
-                            <span class="stat-value">${profile.followers}</span>
-                            <span class="stat-label">Followers</span>
-                        </div>
-                        <div class="stat">
-                            <span class="stat-value">${profile.following}</span>
-                            <span class="stat-label">Following</span>
-                        </div>
-                    </div>
-                    
-                    ${profile.website || profile.twitter || profile.github || profile.nostr || profile.lud16 || profile.lud06 ? `
-                        <div class="profile-links">
-                            ${profile.website ? `<a href="${profile.website}" target="_blank">🌐 Website</a>` : ''}
-                            ${profile.twitter ? `<a href="https://twitter.com/${profile.twitter}" target="_blank">𝕏 Twitter</a>` : ''}
-                            ${profile.github ? `<a href="https://github.com/${profile.github}" target="_blank">⚙️ GitHub</a>` : ''}
-                            ${profile.nostr ? `<a href="${profile.nostr}" target="_blank">⚡ Nostr</a>` : ''}
-                            ${profile.lud16 ? `<p>⚡ ${escapeHtml(profile.lud16)}</p>` : ''}
-                            ${profile.lud06 ? `<p>⚡ ${escapeHtml(profile.lud06)}</p>` : ''}
-                        </div>
-                    ` : ''}
-                    
-                    <div class="pubkey-section">
-                        <div><strong>npub:</strong></div>
-                        <code>${npub || hexKey}</code>
-                        <div style="margin-top: 10px;"><strong>Hex:</strong></div>
-                        <code>${hexKey}</code>
-                    </div>
-                    
-                    <div class="all-fields">
-                        <h3>All Profile Fields</h3>
-                        <table class="field-table">
-                            <tbody>
-                                ${filteredFields.map(key => {
-                                    const value = profile[key];
-                                    const displayValue = formatValue(value);
-                                    return `<tr>
-                                        <td>${escapeHtml(key)}</td>
-                                        <td>${escapeHtml(displayValue.substring(0, 300))}</td>
-                                    </tr>`;
-                                }).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            `;
-        }
-
-        function formatValue(value) {
-            if (value === null || value === undefined) {
-                return "(empty)";
-            }
-            if (typeof value === "object") {
-                return JSON.stringify(value, null, 2);
-            }
-            return String(value);
-        }
-
-        function escapeHtml(text) {
-            const map = {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#039;'
-            };
-            return String(text).replace(/[&<>"']/g, m => map[m]);
-        }
-
-        function showError(message) {
-            const error = document.getElementById('error');
-            error.textContent = message;
-            error.classList.add('active');
-            document.getElementById('businessCard').classList.remove('active');
-        }
-
-        // Placeholder - will be replaced with actual implementation
-        function npubToHex(npub) {
-            // Simple validation - in production you'd decode properly
-            if (npub.startsWith('npub1') && npub.length > 50) {
-                return npub.substring(5);
-            }
-            return null;
-        }
-
-        function hexToNpub(hex) {
-            return 'npub1' + hex.substring(0, 59);
-        }
-
-        document.getElementById('npubInput').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') searchProfile();
         });
     </script>
 </body>
