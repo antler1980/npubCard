@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nostr Profile Viewer</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔍</text></svg>">
     <style>
         * {
             margin: 0;
@@ -16,708 +15,358 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
             padding: 20px;
         }
 
         .container {
-            width: 100%;
-            max-width: 500px;
+            max-width: 600px;
+            margin: 0 auto;
         }
 
-        .search-section {
-            background: white;
-            border-radius: 12px;
-            padding: 30px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-            transition: opacity 0.3s ease;
-        }
-
-        .search-section.hide {
-            display: none;
-        }
-
-        h1 {
+        .header {
             text-align: center;
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 24px;
-        }
-
-        .subtitle {
-            text-align: center;
-            color: #666;
-            font-size: 14px;
-            margin-bottom: 25px;
-        }
-
-        .input-group {
-            margin-bottom: 15px;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 8px;
-            color: #333;
-            font-weight: 600;
-            font-size: 14px;
-        }
-
-        input {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 14px;
-            transition: border-color 0.3s;
-            font-family: 'Courier New', monospace;
-        }
-
-        input:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        .divider {
-            text-align: center;
-            color: #999;
-            margin: 20px 0;
-            font-size: 14px;
-        }
-
-        button {
-            width: 100%;
-            padding: 12px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+
+        .search-box input {
+            flex: 1;
+            padding: 12px 16px;
             border: none;
             border-radius: 8px;
-            font-size: 16px;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .search-box button {
+            padding: 12px 24px;
+            background: white;
+            border: none;
+            border-radius: 8px;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: transform 0.2s;
         }
 
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        .search-box button:hover {
+            transform: scale(1.05);
         }
 
-        button:active {
-            transform: translateY(0);
-        }
-
-        .error-message {
-            color: #e74c3c;
-            font-size: 14px;
-            margin-top: 10px;
-            padding: 10px;
-            background: #fadbd8;
-            border-radius: 6px;
-            display: none;
-        }
-
-        .error-message.show {
-            display: block;
-        }
-
-        .loading {
-            display: none;
-            text-align: center;
-            color: #667eea;
-            font-size: 14px;
-            margin-top: 10px;
-        }
-
-        .loading.show {
-            display: block;
-        }
-
-        .spinner {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid #e0e0e0;
-            border-top-color: #667eea;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin-right: 8px;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .profile-card {
+        .profile-container {
             background: white;
             border-radius: 12px;
-            padding: 30px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-            text-align: center;
-            opacity: 0;
-            transform: translateY(20px);
-            pointer-events: none;
-            transition: opacity 0.3s ease, transform 0.3s ease;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+            display: none;
         }
 
-        .profile-card.show {
-            opacity: 1;
-            transform: translateY(0);
-            pointer-events: auto;
+        .profile-container.active {
+            display: block;
         }
 
-        .avatar-container {
+        .profile-banner {
+            width: 100%;
+            height: 200px;
+            background-color: #667eea;
+        }
+
+        .profile-header {
+            padding: 20px;
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
+        .profile-picture {
             width: 100px;
             height: 100px;
-            margin: 0 auto 20px;
             border-radius: 50%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 48px;
-            overflow: hidden;
-        }
-
-        .avatar-container img {
-            width: 100%;
-            height: 100%;
             object-fit: cover;
+            border: 4px solid white;
+            margin-top: -50px;
+            flex-shrink: 0;
         }
 
-        #displayName {
+        .profile-info {
+            flex: 1;
+            padding-top: 10px;
+        }
+
+        .profile-info h2 {
+            margin: 0 0 8px 0;
             font-size: 24px;
-            font-weight: 700;
             color: #333;
-            margin-bottom: 5px;
         }
 
-        #username {
-            font-size: 16px;
-            color: #667eea;
-            margin-bottom: 15px;
-        }
-
-        #pubkey {
-            font-size: 12px;
-            color: #999;
-            word-break: break-all;
-            margin-bottom: 15px;
-            font-family: 'Courier New', monospace;
-            background: #f5f5f5;
-            padding: 10px;
-            border-radius: 6px;
-        }
-
-        #about {
-            font-size: 14px;
+        .profile-bio {
+            margin: 0;
             color: #666;
-            margin-bottom: 25px;
-            line-height: 1.6;
-            white-space: pre-wrap;
+            font-size: 14px;
+            line-height: 1.5;
         }
 
-        .stats {
+        .profile-stats {
             display: flex;
             justify-content: space-around;
-            padding: 20px 0;
-            border-top: 1px solid #e0e0e0;
-            border-bottom: 1px solid #e0e0e0;
-            margin-bottom: 20px;
+            padding: 20px;
+            border-top: 1px solid #eee;
+            border-bottom: 1px solid #eee;
+            background: #f9f9f9;
         }
 
         .stat {
-            text-align: center;
-        }
-
-        .stat-number {
-            font-size: 20px;
-            font-weight: 700;
-            color: #667eea;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
 
         .stat-label {
             font-size: 12px;
             color: #999;
-            margin-top: 5px;
             text-transform: uppercase;
+            margin-bottom: 8px;
         }
 
-        .action-buttons {
-            display: flex;
-            gap: 10px;
+        .stat-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #667eea;
         }
 
-        .action-buttons button {
-            flex: 1;
-            padding: 10px;
+        .profile-details {
+            padding: 20px;
+        }
+
+        .detail-item {
+            margin: 16px 0;
             font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
 
-        .back-button {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 10px;
-            background: #e0e0e0;
+        .detail-label {
+            font-weight: 600;
             color: #333;
+            min-width: 100px;
         }
 
-        .back-button:hover {
-            background: #d0d0d0;
-            box-shadow: none;
+        .detail-value {
+            color: #666;
+            word-break: break-all;
         }
 
-        @media (max-width: 480px) {
-            .search-section,
-            .profile-card {
-                padding: 20px;
-            }
+        .detail-value a {
+            color: #0066cc;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
 
-            h1 {
-                font-size: 20px;
-            }
+        .detail-value a:hover {
+            color: #0052a3;
+            text-decoration: underline;
+        }
 
-            #displayName {
-                font-size: 20px;
-            }
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 16px;
+            display: none;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .error {
+            background: #ff6b6b;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error.active {
+            display: block;
+        }
+
+        .nip05-verified {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .lightning-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #fff3cd;
+            color: #856404;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="search-section" id="searchSection">
-            <h1>🔍 Nostr Profile Viewer</h1>
-            <p class="subtitle">Search profiles using hex or npub format</p>
-
-            <div class="input-group">
-                <label for="hexInput">Hex Public Key</label>
-                <input type="text" id="hexInput" placeholder="e.g., 3bf0c63fcb93...">
-            </div>
-
-            <div class="divider">OR</div>
-
-            <div class="input-group">
-                <label for="npubInput">Npub</label>
-                <input type="text" id="npubInput" placeholder="e.g., npub1uyf5zf0sk...">
-            </div>
-
-            <button onclick="searchProfile()">Search Profile</button>
-
-            <div class="error-message" id="errorMessage"></div>
-            <div class="loading" id="loading">
-                <span class="spinner"></span>
-                <span>Loading profile...</span>
-            </div>
+        <div class="header">
+            <h1>⚡ Nostr Profile Viewer</h1>
+            <p>Search for any Nostr profile by public key or username</p>
         </div>
 
-        <div class="profile-card" id="profileCard">
-            <button class="back-button" onclick="backToSearch()">← Back to Search</button>
+        <div class="error" id="error"></div>
+        <div class="loading" id="loading">Fetching profile...</div>
 
-            <div class="avatar-container" id="avatarContainer">👤</div>
-            <div id="displayName"></div>
-            <div id="username"></div>
-            <div id="pubkey"></div>
-            <div id="about"></div>
-
-            <div class="stats">
-                <div class="stat">
-                    <div class="stat-number" id="followers">-</div>
-                    <div class="stat-label">Followers</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-number" id="following">-</div>
-                    <div class="stat-label">Following</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-number" id="posts">-</div>
-                    <div class="stat-label">Posts</div>
-                </div>
-            </div>
-
-            <div class="action-buttons">
-                <button onclick="copyPubkey()">Copy Pubkey</button>
-                <button onclick="copyNpub()">Copy Npub</button>
-            </div>
+        <div class="search-box">
+            <input 
+                type="text" 
+                id="searchInput" 
+                placeholder="Enter Nostr pubkey or npub..." 
+                onkeypress="if(event.key === 'Enter') searchProfile()"
+            >
+            <button onclick="searchProfile()">Search</button>
         </div>
+
+        <div class="profile-container" id="profileContainer"></div>
     </div>
 
     <script>
-        const RELAYS = [
-            'wss://relay.damus.io',
-            'wss://nos.lol',
-            'wss://nostr.wine'
-        ];
-
-        let currentProfile = null;
-        let isSearching = false;
-
-        const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
-
-        function npubToHex(npub) {
-            try {
-                if (!npub.startsWith('npub1')) {
-                    return null;
-                }
-
-                const data = npub.slice(5, -6);
-                let bits = 0;
-                let value = 0;
-                const bytes = [];
-
-                for (let i = 0; i < data.length; i++) {
-                    const char = data[i];
-                    const index = CHARSET.indexOf(char);
-                    if (index === -1) {
-                        return null;
-                    }
-                    value = (value << 5) | index;
-                    bits += 5;
-
-                    while (bits >= 8) {
-                        bits -= 8;
-                        bytes.push((value >> bits) & 255);
-                    }
-                }
-
-                const hex = bytes.slice(0, 32).map(b => b.toString(16).padStart(2, '0')).join('');
-                
-                if (hex.length !== 64) {
-                    return null;
-                }
-
-                return hex;
-            } catch (e) {
-                return null;
+        async function fetchCompleteProfile(pubkey) {
+            const response = await fetch(`https://nostr.band/api/v0/profiles/${pubkey}`);
+            if (!response.ok) {
+                throw new Error('Profile not found');
             }
+            const profile = await response.json();
+            
+            return {
+                name: profile.name,
+                about: profile.about,
+                picture: profile.picture,
+                banner: profile.banner,
+                website: profile.website,
+                nip05: profile.nip05,
+                followers: profile.followers,
+                following: profile.following,
+                notes_count: profile.notes,
+                lightning: profile.lud16
+            };
         }
 
-        function hexToNpub(hex) {
-            try {
-                const bytes = [];
-                for (let i = 0; i < hex.length; i += 2) {
-                    bytes.push(parseInt(hex.substr(i, 2), 16));
-                }
-
-                let bits = 0;
-                let value = 0;
-                let npub = 'npub1';
-
-                for (let byte of bytes) {
-                    value = (value << 8) | byte;
-                    bits += 8;
-
-                    while (bits >= 5) {
-                        bits -= 5;
-                        npub += CHARSET[(value >> bits) & 31];
-                    }
-                }
-
-                if (bits > 0) {
-                    npub += CHARSET[(value << (5 - bits)) & 31];
-                }
-
-                npub += '000000';
-                return npub;
-            } catch (e) {
-                return null;
-            }
+        function displayProfile(profile) {
+            const profileHTML = `
+                <div>
+                    ${profile.banner ? `<div class="profile-banner" style="background-image: url('${profile.banner}'); background-size: cover;"></div>` : '<div class="profile-banner"></div>'}
+                    
+                    <div class="profile-header">
+                        ${profile.picture ? `<img src="${profile.picture}" alt="${profile.name}" class="profile-picture">` : '<div class="profile-picture" style="background: #ddd;"></div>'}
+                        <div class="profile-info">
+                            <h2>${profile.name || 'Unknown'}</h2>
+                            <p class="profile-bio">${profile.about || 'No bio available'}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="profile-stats">
+                        <div class="stat">
+                            <span class="stat-label">Followers</span>
+                            <span class="stat-value">${profile.followers || '0'}</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Following</span>
+                            <span class="stat-value">${profile.following || '0'}</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Posts</span>
+                            <span class="stat-value">${profile.notes_count || '0'}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="profile-details">
+                        ${profile.website ? `
+                            <div class="detail-item">
+                                <span class="detail-label">🔗 Website</span>
+                                <span class="detail-value"><a href="${profile.website}" target="_blank">${profile.website}</a></span>
+                            </div>
+                        ` : ''}
+                        ${profile.nip05 ? `
+                            <div class="detail-item">
+                                <span class="detail-label">✓ NIP-05</span>
+                                <span class="detail-value"><span class="nip05-verified">${profile.nip05}</span></span>
+                            </div>
+                        ` : ''}
+                        ${profile.lightning ? `
+                            <div class="detail-item">
+                                <span class="detail-label">⚡ Lightning</span>
+                                <span class="detail-value"><span class="lightning-badge">${profile.lightning}</span></span>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+            
+            const container = document.getElementById('profileContainer');
+            container.innerHTML = profileHTML;
+            container.classList.add('active');
         }
 
-        function showLoading() {
-            document.getElementById('loading').classList.add('show');
-        }
+        async function searchProfile() {
+            const input = document.getElementById('searchInput').value.trim();
+            const errorEl = document.getElementById('error');
+            const loadingEl = document.getElementById('loading');
+            const profileContainer = document.getElementById('profileContainer');
 
-        function hideLoading() {
-            document.getElementById('loading').classList.remove('show');
-        }
+            errorEl.classList.remove('active');
+            profileContainer.classList.remove('active');
 
-        function showError(message) {
-            const errorEl = document.getElementById('errorMessage');
-            errorEl.textContent = message;
-            errorEl.classList.add('show');
-        }
-
-        function hideError() {
-            document.getElementById('errorMessage').classList.remove('show');
-        }
-
-        function searchProfile() {
-            if (isSearching) return;
-
-            hideError();
-            const hexInput = document.getElementById('hexInput').value.trim();
-            const npubInput = document.getElementById('npubInput').value.trim();
-
-            let pubkey = null;
-
-            if (hexInput) {
-                if (!/^[a-f0-9]{64}$/i.test(hexInput)) {
-                    showError('Invalid hex format (must be 64 hex characters)');
-                    return;
-                }
-                pubkey = hexInput.toLowerCase();
-            } else if (npubInput) {
-                if (!npubInput.startsWith('npub1')) {
-                    showError('Invalid npub format (must start with npub1)');
-                    return;
-                }
-                pubkey = npubToHex(npubInput);
-                if (!pubkey) {
-                    showError('Could not decode npub. Please check the format.');
-                    return;
-                }
-            } else {
-                showError('Please enter a hex key or npub');
+            if (!input) {
+                errorEl.textContent = 'Please enter a Nostr public key or npub';
+                errorEl.classList.add('active');
                 return;
             }
 
-            isSearching = true;
-            showLoading();
-            fetchProfile(pubkey);
-        }
-
-        function fetchProfile(pubkey) {
-            let attempts = 0;
-
-            function tryNextRelay() {
-                if (attempts >= RELAYS.length) {
-                    hideLoading();
-                    showError('Profile not found on any relay.');
-                    isSearching = false;
-                    return;
-                }
-
-                const relay = RELAYS[attempts];
-                attempts++;
-
-                fetchFromRelay(relay, pubkey)
-                    .then(profile => {
-                        if (profile) {
-                            hideLoading();
-                            displayProfile(pubkey, profile);
-                            isSearching = false;
-                            fetchStats(pubkey);
-                        } else {
-                            tryNextRelay();
-                        }
-                    })
-                    .catch(error => {
-                        tryNextRelay();
-                    });
-            }
-
-            tryNextRelay();
-        }
-
-        function fetchFromRelay(relayUrl, pubkey) {
-            return new Promise((resolve, reject) => {
-                let ws = null;
-                let timeout = null;
-                let resolved = false;
-
-                try {
-                    ws = new WebSocket(relayUrl);
-
-                    timeout = setTimeout(() => {
-                        if (!resolved) {
-                            resolved = true;
-                            if (ws && ws.readyState === WebSocket.OPEN) {
-                                ws.close();
-                            }
-                            resolve(null);
-                        }
-                    }, 5000);
-
-                    ws.onopen = () => {
-                        const subId = 'p' + Math.random().toString(36).substring(7);
-                        const filter = { kinds: [0], authors: [pubkey] };
-                        ws.send(JSON.stringify(['REQ', subId, filter]));
-                    };
-
-                    ws.onmessage = (event) => {
-                        try {
-                            const message = JSON.parse(event.data);
-
-                            if (message[0] === 'EVENT' && !resolved) {
-                                const evt = message[2];
-                                if (evt.kind === 0) {
-                                    resolved = true;
-                                    clearTimeout(timeout);
-                                    if (ws) ws.close();
-
-                                    try {
-                                        const profile = JSON.parse(evt.content);
-                                        resolve(profile);
-                                    } catch (parseErr) {
-                                        resolve({});
-                                    }
-                                }
-                            }
-                        } catch (e) {}
-                    };
-
-                    ws.onerror = () => {
-                        if (!resolved) {
-                            resolved = true;
-                            clearTimeout(timeout);
-                            resolve(null);
-                        }
-                    };
-
-                    ws.onclose = () => {
-                        if (!resolved) {
-                            resolved = true;
-                            clearTimeout(timeout);
-                            resolve(null);
-                        }
-                    };
-                } catch (e) {
-                    clearTimeout(timeout);
-                    reject(e);
-                }
-            });
-        }
-
-        function fetchStats(pubkey) {
-            fetchFollowingAndPosts(pubkey);
-        }
-
-        function fetchFollowingAndPosts(pubkey) {
-            const relay = RELAYS[0];
+            loadingEl.classList.add('active');
 
             try {
-                const ws = new WebSocket(relay);
-
-                let following = 0;
-                let posts = 0;
-                let hasFollowing = false;
-
-                const timeout = setTimeout(() => {
-                    if (ws && ws.readyState === WebSocket.OPEN) {
-                        ws.close();
-                    }
-                    updateStats(following, posts);
-                }, 4000);
-
-                ws.onopen = () => {
-                    const filter = { authors: [pubkey], kinds: [1, 3] };
-                    ws.send(JSON.stringify(['REQ', 'stats-' + pubkey, filter]));
-                };
-
-                ws.onmessage = (event) => {
-                    try {
-                        const message = JSON.parse(event.data);
-
-                        if (message[0] === 'EVENT') {
-                            const evt = message[2];
-                            if (evt.kind === 3 && !hasFollowing) {
-                                hasFollowing = true;
-                                const tags = evt.tags || [];
-                                following = tags.filter(tag => tag[0] === 'p').length;
-                            } else if (evt.kind === 1) {
-                                posts++;
-                            }
-                        }
-
-                        if (message[0] === 'EOSE') {
-                            clearTimeout(timeout);
-                            updateStats(following, posts);
-                            ws.close();
-                        }
-                    } catch (e) {}
-                };
-
-                ws.onerror = () => {
-                    clearTimeout(timeout);
-                    updateStats(following, posts);
-                };
-
-                ws.onclose = () => {
-                    clearTimeout(timeout);
-                };
-
-            } catch (e) {
-                updateStats(0, 0);
-            }
-        }
-
-        function updateStats(following, posts) {
-            document.getElementById('following').textContent = following || '0';
-            document.getElementById('posts').textContent = posts || '0';
-            document.getElementById('followers').textContent = '-';
-        }
-
-        function displayProfile(pubkey, profile) {
-            document.getElementById('hexInput').value = '';
-            document.getElementById('npubInput').value = '';
-            document.getElementById('searchSection').classList.add('hide');
-
-            const displayName = profile.display_name || profile.name || 'Anonymous';
-            const username = profile.name || pubkey.substring(0, 8);
-            const about = profile.about || '(No bio)';
-            const picture = profile.picture;
-
-            currentProfile = {
-                pubkey: pubkey,
-                ...profile
-            };
-
-            document.getElementById('displayName').textContent = displayName;
-            document.getElementById('username').textContent = '@' + username;
-            document.getElementById('pubkey').textContent = pubkey;
-            document.getElementById('about').textContent = about;
-
-            const avatarContainer = document.getElementById('avatarContainer');
-            if (picture) {
-                avatarContainer.innerHTML = `<img src="${picture}" alt="avatar" onerror="this.innerHTML='👤'">`;
-            } else {
-                avatarContainer.innerHTML = '👤';
-            }
-
-            document.getElementById('followers').textContent = '-';
-            document.getElementById('following').textContent = '-';
-            document.getElementById('posts').textContent = '-';
-
-            document.getElementById('profileCard').classList.add('show');
-        }
-
-        function backToSearch() {
-            isSearching = false;
-            document.getElementById('profileCard').classList.remove('show');
-            document.getElementById('searchSection').classList.remove('hide');
-            currentProfile = null;
-            hideError();
-            hideLoading();
-        }
-
-        function copyPubkey() {
-            if (currentProfile) {
-                navigator.clipboard.writeText(currentProfile.pubkey);
-                alert('Pubkey copied!');
-            }
-        }
-
-        function copyNpub() {
-            if (currentProfile) {
-                const npub = hexToNpub(currentProfile.pubkey);
-                if (npub) {
-                    navigator.clipboard.writeText(npub);
-                    alert('Npub copied!');
+                let pubkey = input;
+                
+                // If it's an npub, convert to hex
+                if (input.startsWith('npub1')) {
+                    pubkey = input;
                 }
+
+                const profile = await fetchCompleteProfile(pubkey);
+                displayProfile(profile);
+                loadingEl.classList.remove('active');
+            } catch (error) {
+                errorEl.textContent = 'Profile not found. Make sure you entered a valid public key.';
+                errorEl.classList.add('active');
+                loadingEl.classList.remove('active');
             }
         }
-
-        document.getElementById('hexInput').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') searchProfile();
-        });
-
-        document.getElementById('npubInput').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') searchProfile();
-        });
     </script>
 </body>
 </html>
