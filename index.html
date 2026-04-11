@@ -12,87 +12,177 @@
             box-sizing: border-box;
         }
 
+        html, body {
+            height: 100%;
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
             min-height: 100vh;
             padding: 20px;
         }
 
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
+        .main-container {
+            width: 100%;
+            max-width: 500px;
         }
 
-        .header {
+        .card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px 30px;
             text-align: center;
             color: white;
-            margin-bottom: 40px;
         }
 
-        .header h1 {
+        .card-header h1 {
             font-size: 32px;
-            margin-bottom: 10px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
         }
 
-        .header p {
+        .card-header p {
             font-size: 14px;
             opacity: 0.9;
+            font-weight: 400;
         }
 
-        .search-box {
+        .card-body {
+            padding: 40px 30px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .input-wrapper {
+            position: relative;
             display: flex;
-            gap: 10px;
-            margin-bottom: 30px;
+            gap: 8px;
         }
 
-        .search-box input {
+        #searchInput {
             flex: 1;
-            padding: 12px 16px;
-            border: none;
+            padding: 14px 16px;
+            border: 2px solid #e0e0e0;
             border-radius: 8px;
             font-size: 14px;
-            outline: none;
             font-family: 'Courier New', monospace;
+            transition: border-color 0.3s, box-shadow 0.3s;
         }
 
-        .search-box button {
-            padding: 12px 24px;
-            background: white;
+        #searchInput:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .search-button {
+            padding: 14px 28px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
             border: none;
             border-radius: 8px;
             font-weight: 600;
+            font-size: 14px;
             cursor: pointer;
-            transition: transform 0.2s;
-            color: #667eea;
+            transition: transform 0.2s, box-shadow 0.2s;
+            white-space: nowrap;
         }
 
-        .search-box button:hover {
-            transform: scale(1.05);
+        .search-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
         }
 
-        .profile-container {
-            background: white;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        .search-button:active {
+            transform: translateY(0);
+        }
+
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 13px;
             display: none;
         }
 
-        .profile-container.active {
+        .error.active {
+            display: block;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 30px 20px;
+            display: none;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border: 3px solid #f0f0f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            margin-top: 12px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        /* Profile View */
+        .profile-view {
+            display: none;
+        }
+
+        .profile-view.active {
             display: block;
         }
 
         .profile-banner {
             width: 100%;
-            height: 200px;
+            height: 160px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             background-size: cover;
             background-position: center;
         }
 
         .profile-header {
-            padding: 20px;
+            padding: 0 30px 30px 30px;
             display: flex;
             gap: 20px;
             align-items: flex-start;
@@ -107,6 +197,7 @@
             margin-top: -50px;
             flex-shrink: 0;
             background: #ddd;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
 
         .profile-info {
@@ -115,25 +206,42 @@
         }
 
         .profile-info h2 {
-            margin: 0 0 8px 0;
+            margin: 0 0 4px 0;
             font-size: 24px;
+            font-weight: 700;
             color: #333;
         }
 
         .profile-bio {
-            margin: 0;
+            margin: 8px 0 0 0;
             color: #666;
-            font-size: 14px;
+            font-size: 13px;
             line-height: 1.5;
         }
 
+        .back-button {
+            padding: 8px 16px;
+            background: #f0f0f0;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #333;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-bottom: 20px;
+        }
+
+        .back-button:hover {
+            background: #e0e0e0;
+        }
+
         .profile-details {
-            padding: 20px;
+            padding: 0 30px 30px 30px;
         }
 
         .detail-item {
-            margin: 16px 0;
-            font-size: 14px;
+            margin: 20px 0;
+            font-size: 13px;
             display: flex;
             align-items: flex-start;
             gap: 12px;
@@ -142,7 +250,7 @@
         .detail-label {
             font-weight: 600;
             color: #333;
-            min-width: 100px;
+            min-width: 90px;
             flex-shrink: 0;
         }
 
@@ -163,43 +271,41 @@
             text-decoration: underline;
         }
 
-        .nip05-verified {
+        .badge {
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            background: #e3f2fd;
-            color: #1976d2;
             padding: 6px 14px;
             border-radius: 12px;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 600;
         }
 
-        .lightning-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
+        .badge-nip05 {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .badge-lightning {
             background: #fff3cd;
             color: #856404;
-            padding: 6px 14px;
-            border-radius: 12px;
-            font-size: 13px;
-            font-weight: 600;
         }
 
         .section-title {
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 700;
             color: #333;
-            margin-top: 24px;
-            margin-bottom: 12px;
+            margin-top: 28px;
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
             padding-bottom: 8px;
             border-bottom: 2px solid #667eea;
         }
 
         .followers-list {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
             gap: 12px;
         }
 
@@ -209,16 +315,17 @@
             padding: 12px;
             text-align: center;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: background 0.2s, box-shadow 0.2s;
         }
 
         .follower-item:hover {
             background: #efefef;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
 
         .follower-avatar {
-            width: 60px;
-            height: 60px;
+            width: 56px;
+            height: 56px;
             border-radius: 50%;
             margin: 0 auto 8px;
             object-fit: cover;
@@ -226,101 +333,117 @@
         }
 
         .follower-name {
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 600;
             color: #333;
             word-break: break-word;
         }
 
-        .no-data {
-            text-align: center;
-            color: #999;
-            font-size: 14px;
-            padding: 20px;
-            background: #f9f9f9;
-            border-radius: 8px;
+        .pubkey-section {
+            margin-top: 28px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            font-size: 12px;
+            color: #666;
         }
 
-        .pubkey-section {
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 1px solid #eee;
-            font-size: 12px;
-            color: #999;
+        .pubkey-label {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 0.5px;
         }
 
         .pubkey-text {
             background: #f5f5f5;
-            padding: 10px;
+            padding: 12px;
             border-radius: 6px;
             font-family: 'Courier New', monospace;
             word-break: break-all;
-            margin-top: 8px;
             font-size: 11px;
+            line-height: 1.4;
+            margin-bottom: 16px;
         }
 
-        .loading {
-            text-align: center;
-            color: white;
-            font-size: 16px;
-            display: none;
-        }
+        @media (max-width: 600px) {
+            .card-header {
+                padding: 30px 20px;
+            }
 
-        .loading.active {
-            display: block;
-        }
+            .card-header h1 {
+                font-size: 28px;
+            }
 
-        .spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255,255,255,0.3);
-            border-top-color: white;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin-right: 10px;
-            vertical-align: middle;
-        }
+            .card-body {
+                padding: 30px 20px;
+            }
 
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
+            .profile-header {
+                padding: 0 20px 20px 20px;
+            }
 
-        .error {
-            background: #ff6b6b;
-            color: white;
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
-        }
-
-        .error.active {
-            display: block;
+            .profile-details {
+                padding: 0 20px 20px 20px;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>⚡ Nostr Profile Viewer</h1>
-            <p>Search for any Nostr profile by public key or npub</p>
+    <div class="main-container">
+        <!-- Search View -->
+        <div class="card" id="searchView">
+            <div class="card-header">
+                <h1>⚡ Nostr Profile</h1>
+                <p>Search and view profiles</p>
+            </div>
+
+            <div class="card-body">
+                <div class="error" id="error"></div>
+
+                <div class="input-group">
+                    <label class="input-label">Enter Nostr Key</label>
+                    <div class="input-wrapper">
+                        <input 
+                            type="text" 
+                            id="searchInput" 
+                            placeholder="npub or hex pubkey..." 
+                            onkeypress="if(event.key === 'Enter') searchProfile()"
+                        >
+                        <button class="search-button" onclick="searchProfile()">Search</button>
+                    </div>
+                </div>
+
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <div class="loading-text">Fetching profile...</div>
+                </div>
+            </div>
         </div>
 
-        <div class="error" id="error"></div>
-        <div class="loading" id="loading"><span class="spinner"></span>Fetching profile...</div>
+        <!-- Profile View -->
+        <div class="card profile-view" id="profileView">
+            <button class="back-button" onclick="backToSearch()" style="margin: 20px;">← Back</button>
 
-        <div class="search-box">
-            <input 
-                type="text" 
-                id="searchInput" 
-                placeholder="Enter Nostr pubkey or npub..." 
-                onkeypress="if(event.key === 'Enter') searchProfile()"
-            >
-            <button onclick="searchProfile()">Search</button>
+            <div class="profile-container">
+                <div class="profile-banner" id="profileBanner"></div>
+                
+                <div class="profile-header">
+                    <img id="profilePicture" alt="Profile" class="profile-picture">
+                    <div class="profile-info">
+                        <h2 id="profileName">Loading...</h2>
+                        <p class="profile-bio" id="profileBio"></p>
+                    </div>
+                </div>
+
+                <div class="profile-details">
+                    <div id="profileLinksContainer"></div>
+                    <div id="followersContainer"></div>
+                    <div id="pubkeyContainer"></div>
+                </div>
+            </div>
         </div>
-
-        <div class="profile-container" id="profileContainer"></div>
     </div>
 
     <script>
@@ -573,9 +696,59 @@
             return profiles;
         }
 
-        function displayProfile(profile, followers) {
+        async function displayProfile(profile, followers) {
             const npub = hexToNpub(profile.pubkey);
             
+            // Set banner
+            const bannerEl = document.getElementById('profileBanner');
+            if (profile.banner) {
+                bannerEl.style.backgroundImage = `url('${profile.banner}')`;
+            }
+
+            // Set picture
+            const picEl = document.getElementById('profilePicture');
+            if (profile.picture) {
+                picEl.src = profile.picture;
+                picEl.onerror = function() { this.style.display = 'none'; };
+            } else {
+                picEl.style.display = 'none';
+            }
+
+            // Set name and bio
+            document.getElementById('profileName').textContent = profile.name;
+            document.getElementById('profileBio').textContent = profile.about || '';
+
+            // Set links
+            let linksHTML = '';
+            if (profile.website || profile.nip05 || profile.lightning) {
+                if (profile.website) {
+                    linksHTML += `
+                        <div class="detail-item">
+                            <span class="detail-label">🔗 Website</span>
+                            <span class="detail-value"><a href="${profile.website}" target="_blank">${profile.website}</a></span>
+                        </div>
+                    `;
+                }
+                if (profile.nip05) {
+                    linksHTML += `
+                        <div class="detail-item">
+                            <span class="detail-label">✓ NIP-05</span>
+                            <span class="detail-value"><span class="badge badge-nip05">✓ ${profile.nip05}</span></span>
+                        </div>
+                    `;
+                }
+                if (profile.lightning) {
+                    linksHTML += `
+                        <div class="detail-item">
+                            <span class="detail-label">⚡ Lightning</span>
+                            <span class="detail-value"><span class="badge badge-lightning">⚡ ${profile.lightning}</span></span>
+                        </div>
+                    `;
+                }
+            }
+            document.getElementById('profileLinksContainer').innerHTML = linksHTML;
+
+            // Set followers
             let followersHTML = '';
             if (followers && followers.length > 0) {
                 followersHTML = `
@@ -590,64 +763,34 @@
                     </div>
                 `;
             }
+            document.getElementById('followersContainer').innerHTML = followersHTML;
 
-            const profileHTML = `
+            // Set pubkeys
+            const pubkeyHTML = `
+                <div class="section-title">Public Keys</div>
                 <div>
-                    ${profile.banner ? `<div class="profile-banner" style="background-image: url('${profile.banner}');"></div>` : '<div class="profile-banner"></div>'}
-                    
-                    <div class="profile-header">
-                        ${profile.picture ? `<img src="${profile.picture}" alt="${profile.name}" class="profile-picture" onerror="this.style.display='none'">` : ''}
-                        <div class="profile-info">
-                            <h2>${profile.name}</h2>
-                            <p class="profile-bio">${profile.about || 'No bio available'}</p>
-                        </div>
-                    </div>
-                    
-                    <div class="profile-details">
-                        ${profile.website ? `
-                            <div class="detail-item">
-                                <span class="detail-label">🔗 Website</span>
-                                <span class="detail-value"><a href="${profile.website}" target="_blank">${profile.website}</a></span>
-                            </div>
-                        ` : ''}
-                        ${profile.nip05 ? `
-                            <div class="detail-item">
-                                <span class="detail-label">✓ NIP-05</span>
-                                <span class="detail-value"><span class="nip05-verified">✓ ${profile.nip05}</span></span>
-                            </div>
-                        ` : ''}
-                        ${profile.lightning ? `
-                            <div class="detail-item">
-                                <span class="detail-label">⚡ Lightning</span>
-                                <span class="detail-value"><span class="lightning-badge">⚡ ${profile.lightning}</span></span>
-                            </div>
-                        ` : ''}
-
-                        ${followersHTML}
-                        
-                        <div class="pubkey-section">
-                            <div><strong>Public Key (hex):</strong></div>
-                            <div class="pubkey-text">${profile.pubkey}</div>
-                            <div style="margin-top: 12px;"><strong>Public Key (npub):</strong></div>
-                            <div class="pubkey-text">${npub}</div>
-                        </div>
-                    </div>
+                    <div class="pubkey-label">Hex</div>
+                    <div class="pubkey-text">${profile.pubkey}</div>
+                </div>
+                <div>
+                    <div class="pubkey-label">Npub</div>
+                    <div class="pubkey-text">${npub}</div>
                 </div>
             `;
-            
-            const container = document.getElementById('profileContainer');
-            container.innerHTML = profileHTML;
-            container.classList.add('active');
+            document.getElementById('pubkeyContainer').innerHTML = pubkeyHTML;
+
+            // Show profile view
+            document.getElementById('searchView').style.display = 'none';
+            document.getElementById('profileView').classList.add('active');
         }
 
         async function searchProfile() {
             const input = document.getElementById('searchInput').value.trim();
             const errorEl = document.getElementById('error');
             const loadingEl = document.getElementById('loading');
-            const profileContainer = document.getElementById('profileContainer');
 
             errorEl.classList.remove('active');
-            profileContainer.classList.remove('active');
+            errorEl.textContent = '';
 
             if (!input) {
                 errorEl.textContent = 'Please enter a Nostr public key or npub';
@@ -679,7 +822,7 @@
                     followerProfiles = Object.values(await fetchFollowerProfiles(followers.map(f => f.pubkey)));
                 }
                 
-                displayProfile(profile, followerProfiles);
+                await displayProfile(profile, followerProfiles);
                 loadingEl.classList.remove('active');
             } catch (error) {
                 errorEl.textContent = error.message || 'Profile not found. Make sure you entered a valid public key.';
@@ -687,6 +830,18 @@
                 loadingEl.classList.remove('active');
             }
         }
+
+        function backToSearch() {
+            document.getElementById('profileView').classList.remove('active');
+            document.getElementById('searchView').style.display = 'block';
+            document.getElementById('searchInput').value = '';
+            document.getElementById('error').classList.remove('active');
+        }
+
+        // Focus input on load
+        window.addEventListener('load', () => {
+            document.getElementById('searchInput').focus();
+        });
     </script>
 </body>
 </html>
