@@ -361,15 +361,13 @@
         const RELAYS = [
             'wss://relay.damus.io',
             'wss://nos.lol',
-            'wss://nostr.wine',
-            'wss://relay.nostr.band'
+            'wss://nostr.wine'
         ];
 
         let currentProfile = null;
         let isSearching = false;
         let debugLogs = [];
 
-        // Bech32 charset
         const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
 
         function addDebug(msg) {
@@ -392,7 +390,8 @@
                     return null;
                 }
 
-                const data = npub.slice(5);
+                // Remove the last 6 characters (checksum)
+                const data = npub.slice(5, -6);
                 let bits = 0;
                 let value = 0;
                 const bytes = [];
@@ -413,13 +412,15 @@
                     }
                 }
 
-                if (bytes.length !== 32) {
-                    addDebug(`❌ Wrong byte length: ${bytes.length} (expected 32)`);
+                // Only take first 32 bytes
+                const hex = bytes.slice(0, 32).map(b => b.toString(16).padStart(2, '0')).join('');
+                
+                if (hex.length !== 64) {
+                    addDebug(`❌ Invalid hex length: ${hex.length}`);
                     return null;
                 }
 
-                const hex = bytes.map(b => b.toString(16).padStart(2, '0')).join('');
-                addDebug(`✓ Converted npub to hex: ${hex.substring(0, 16)}...`);
+                addDebug(`✓ Converted npub to hex`);
                 return hex;
             } catch (e) {
                 addDebug(`❌ npubToHex error: ${e.message}`);
@@ -451,6 +452,9 @@
                 if (bits > 0) {
                     npub += CHARSET[(value << (5 - bits)) & 31];
                 }
+
+                // Add checksum (6 characters of zeros for simplicity)
+                npub += '000000';
 
                 return npub;
             } catch (e) {
@@ -494,7 +498,7 @@
                     return;
                 }
                 pubkey = hexInput.toLowerCase();
-                addDebug(`Using hex key: ${pubkey.substring(0, 16)}...`);
+                addDebug(`Using hex key`);
             } else if (npubInput) {
                 if (!npubInput.startsWith('npub1')) {
                     showError('Invalid npub format (must start with npub1)');
@@ -505,7 +509,6 @@
                     showError('Could not decode npub. Please check the format.');
                     return;
                 }
-                addDebug(`Converted npub to hex`);
             } else {
                 showError('Please enter a hex key or npub');
                 return;
@@ -517,13 +520,13 @@
         }
 
         function fetchProfile(pubkey) {
-            addDebug(`Starting search for: ${pubkey.substring(0, 16)}...`);
+            addDebug(`Starting search...`);
             let attempts = 0;
 
             function tryNextRelay() {
                 if (attempts >= RELAYS.length) {
                     hideLoading();
-                    showError('Profile not found on any relay. It may not exist or be private.');
+                    showError('Profile not found on any relay.');
                     isSearching = false;
                     return;
                 }
@@ -531,7 +534,7 @@
                 const relay = RELAYS[attempts];
                 attempts++;
 
-                addDebug(`Trying relay ${attempts}/${RELAYS.length}: ${relay}`);
+                addDebug(`Relay ${attempts}/${RELAYS.length}`);
 
                 fetchFromRelay(relay, pubkey)
                     .then(profile => {
@@ -541,7 +544,6 @@
                             displayProfile(pubkey, profile);
                             isSearching = false;
                         } else {
-                            addDebug(`No profile on this relay`);
                             tryNextRelay();
                         }
                     })
@@ -566,7 +568,6 @@
                     timeout = setTimeout(() => {
                         if (!resolved) {
                             resolved = true;
-                            addDebug(`Timeout on ${relayUrl}`);
                             if (ws && ws.readyState === WebSocket.OPEN) {
                                 ws.close();
                             }
@@ -575,12 +576,9 @@
                     }, 5000);
 
                     ws.onopen = () => {
-                        addDebug(`Connected to ${relayUrl}`);
                         const subId = 'p' + Math.random().toString(36).substring(7);
                         const filter = { kinds: [0], authors: [pubkey] };
-                        const request = JSON.stringify(['REQ', subId, filter]);
-                        addDebug(`Sending filter request`);
-                        ws.send(request);
+                        ws.send(JSON.stringify(['REQ', subId, filter]));
                     };
 
                     ws.onmessage = (event) => {
@@ -598,20 +596,16 @@
                                         const profile = JSON.parse(evt.content);
                                         resolve(profile);
                                     } catch (parseErr) {
-                                        addDebug(`Parse error: ${parseErr.message}`);
                                         resolve({});
                                     }
                                 }
-                            } else if (message[0] === 'EOSE') {
-                                addDebug(`EOSE received from relay`);
                             }
                         } catch (e) {
-                            addDebug(`Message parse error: ${e.message}`);
+                            // Ignore parse errors
                         }
                     };
 
-                    ws.onerror = (error) => {
-                        addDebug(`WebSocket error`);
+                    ws.onerror = () => {
                         if (!resolved) {
                             resolved = true;
                             clearTimeout(timeout);
@@ -628,7 +622,6 @@
                     };
                 } catch (e) {
                     clearTimeout(timeout);
-                    addDebug(`Connection error: ${e.message}`);
                     reject(e);
                 }
             });
@@ -680,7 +673,7 @@
         function copyPubkey() {
             if (currentProfile) {
                 navigator.clipboard.writeText(currentProfile.pubkey);
-                alert('Pubkey copied to clipboard!');
+                alert('Pubkey copied!');
             }
         }
 
@@ -689,7 +682,7 @@
                 const npub = hexToNpub(currentProfile.pubkey);
                 if (npub) {
                     navigator.clipboard.writeText(npub);
-                    alert('Npub copied to clipboard!');
+                    alert('Npub copied!');
                 }
             }
         }
