@@ -127,34 +127,6 @@
             line-height: 1.5;
         }
 
-        .profile-stats {
-            display: flex;
-            justify-content: space-around;
-            padding: 20px;
-            border-top: 1px solid #eee;
-            border-bottom: 1px solid #eee;
-            background: #f9f9f9;
-        }
-
-        .stat {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .stat-label {
-            font-size: 12px;
-            color: #999;
-            text-transform: uppercase;
-            margin-bottom: 8px;
-        }
-
-        .stat-value {
-            font-size: 20px;
-            font-weight: bold;
-            color: #667eea;
-        }
-
         .profile-details {
             padding: 20px;
         }
@@ -462,57 +434,7 @@
             throw new Error('Profile not found on any relay');
         }
 
-        async function fetchStats(pubkey) {
-            for (const relay of RELAYS) {
-                const ws = new WebSocket(relay);
-                
-                return new Promise((resolve) => {
-                    let following = 0;
-                    let posts = 0;
-
-                    const timeout = setTimeout(() => {
-                        if (ws && ws.readyState === WebSocket.OPEN) {
-                            ws.close();
-                        }
-                        resolve({ following, posts });
-                    }, 3000);
-
-                    ws.onopen = () => {
-                        const filter = { authors: [pubkey], kinds: [1, 3] };
-                        ws.send(JSON.stringify(['REQ', 'stats-' + pubkey, filter]));
-                    };
-
-                    ws.onmessage = (event) => {
-                        try {
-                            const message = JSON.parse(event.data);
-
-                            if (message[0] === 'EVENT') {
-                                const evt = message[2];
-                                if (evt.kind === 3) {
-                                    const tags = evt.tags || [];
-                                    following = tags.filter(tag => tag[0] === 'p').length;
-                                } else if (evt.kind === 1) {
-                                    posts++;
-                                }
-                            }
-
-                            if (message[0] === 'EOSE') {
-                                clearTimeout(timeout);
-                                ws.close();
-                                resolve({ following, posts });
-                            }
-                        } catch (e) {}
-                    };
-
-                    ws.onerror = () => {
-                        clearTimeout(timeout);
-                        resolve({ following, posts });
-                    };
-                });
-            }
-        }
-
-        function displayProfile(profile, stats) {
+        function displayProfile(profile) {
             const npub = hexToNpub(profile.pubkey);
             
             const profileHTML = `
@@ -524,17 +446,6 @@
                         <div class="profile-info">
                             <h2>${profile.name}</h2>
                             <p class="profile-bio">${profile.about || 'No bio available'}</p>
-                        </div>
-                    </div>
-                    
-                    <div class="profile-stats">
-                        <div class="stat">
-                            <span class="stat-label">Following</span>
-                            <span class="stat-value">${stats.following || '0'}</span>
-                        </div>
-                        <div class="stat">
-                            <span class="stat-label">Posts</span>
-                            <span class="stat-value">${stats.posts || '0'}</span>
                         </div>
                     </div>
                     
@@ -606,9 +517,8 @@
                 pubkey = pubkey.toLowerCase();
 
                 const profile = await fetchCompleteProfile(pubkey);
-                const stats = await fetchStats(pubkey);
                 
-                displayProfile(profile, stats);
+                displayProfile(profile);
                 loadingEl.classList.remove('active');
             } catch (error) {
                 errorEl.textContent = error.message || 'Profile not found. Make sure you entered a valid public key.';
