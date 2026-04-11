@@ -32,7 +32,7 @@
             padding: 30px;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
-            transition: opacity 0.3s ease, transform 0.3s ease;
+            transition: opacity 0.3s ease;
         }
 
         .search-section.hide {
@@ -294,7 +294,7 @@
 
             <div class="input-group">
                 <label for="hexInput">Hex Public Key</label>
-                <input type="text" id="hexInput" placeholder="e.g., 3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa3d6">
+                <input type="text" id="hexInput" placeholder="e.g., 3bf0c63fcb93...">
             </div>
 
             <div class="divider">OR</div>
@@ -348,13 +348,78 @@
         const RELAYS = [
             'wss://relay.damus.io',
             'wss://nos.lol',
-            'wss://nostr.wine',
-            'wss://relay.nostr.band'
+            'wss://nostr.wine'
         ];
 
         let currentProfile = null;
-        let activeWebSockets = [];
-        let searchTimeout = null;
+        let isSearching = false;
+
+        // Bech32 charset
+        const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+
+        function npubToHex(npub) {
+            try {
+                if (!npub.startsWith('npub1')) {
+                    return null;
+                }
+
+                const data = npub.slice(5);
+                let bits = 0;
+                let value = 0;
+                const bytes = [];
+
+                for (let char of data) {
+                    const index = CHARSET.indexOf(char);
+                    if (index === -1) {
+                        return null;
+                    }
+                    value = (value << 5) | index;
+                    bits += 5;
+
+                    while (bits >= 8) {
+                        bits -= 8;
+                        bytes.push((value >> bits) & 255);
+                    }
+                }
+
+                return bytes.map(b => b.toString(16).padStart(2, '0')).join('');
+            } catch (e) {
+                console.error('npubToHex error:', e);
+                return null;
+            }
+        }
+
+        function hexToNpub(hex) {
+            try {
+                const bytes = [];
+                for (let i = 0; i < hex.length; i += 2) {
+                    bytes.push(parseInt(hex.substr(i, 2), 16));
+                }
+
+                let bits = 0;
+                let value = 0;
+                let npub = 'npub1';
+
+                for (let byte of bytes) {
+                    value = (value << 8) | byte;
+                    bits += 8;
+
+                    while (bits >= 5) {
+                        bits -= 5;
+                        npub += CHARSET[(value >> bits) & 31];
+                    }
+                }
+
+                if (bits > 0) {
+                    npub += CHARSET[(value << (5 - bits)) & 31];
+                }
+
+                return npub;
+            } catch (e) {
+                console.error('hexToNpub error:', e);
+                return null;
+            }
+        }
 
         function showLoading() {
             document.getElementById('loading').classList.add('show');
@@ -374,179 +439,161 @@
             document.getElementById('errorMessage').classList.remove('show');
         }
 
-        function closeAllWebSockets() {
-            activeWebSockets.forEach(ws => {
-                try {
-                    ws.close();
-                } catch (e) {}
-            });
-            activeWebSockets = [];
-        }
-
-        function hexToNpub(hex) {
-            try {
-                const charset = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
-                const bytes = [];
-                for (let i = 0; i < hex.length; i += 2) {
-                    bytes.push(parseInt(hex.substr(i, 2), 16));
-                }
-
-                let bits = 0;
-                let value = 0;
-                let npub = 'npub1';
-
-                for (let byte of bytes) {
-                    value = (value << 8) | byte;
-                    bits += 8;
-                    while (bits >= 5) {
-                        bits -= 5;
-                        npub += charset[(value >> bits) & 31];
-                    }
-                }
-                if (bits > 0) {
-                    npub += charset[(value << (5 - bits)) & 31];
-                }
-                return npub;
-            } catch (e) {
-                console.error('Error converting hex to npub:', e);
-                return null;
-            }
-        }
-
-        function npubToHex(npub) {
-            try {
-                if (!npub.startsWith('npub1')) return null;
-                const charset = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
-                const data = npub.slice(5);
-                let bits = 0;
-                let value = 0;
-                const bytes = [];
-
-                for (let char of data) {
-                    const index = charset.indexOf(char);
-                    if (index === -1) return null;
-                    value = (value << 5) | index;
-                    bits += 5;
-                    while (bits >= 8) {
-                        bits -= 8;
-                        bytes.push((value >> bits) & 255);
-                    }
-                }
-                return bytes.map(b => b.toString(16).padStart(2, '0')).join('');
-            } catch (e) {
-                console.error('Error converting npub to hex:', e);
-                return null;
-            }
-        }
-
         function searchProfile() {
+            if (isSearching) return;
+
             hideError();
             const hexInput = document.getElementById('hexInput').value.trim();
             const npubInput = document.getElementById('npubInput').value.trim();
 
-            let pubkey = hexInput || npubInput;
+            let pubkey = null;
 
-            if (!pubkey) {
+            if (hexInput) {
+                if (!/^[a-f0-9]{64}$/i.test(hexInput)) {
+                    showError('Invalid hex format (must be 64 hex characters)');
+                    return;
+                }
+                pubkey = hexInput.toLowerCase();
+            } else if (npubInput) {
+                if (!npubInput.startsWith('npub1')) {
+                    showError('Invalid npub format (must start with npub1)');
+                    return;
+                }
+                pubkey = npubToHex(npubInput);
+                if (!pubkey) {
+                    showError('Could not decode npub. Please check the format.');
+                    return;
+                }
+            } else {
                 showError('Please enter a hex key or npub');
                 return;
             }
 
-            if (pubkey.startsWith('npub1')) {
-                pubkey = npubToHex(pubkey);
-                if (!pubkey) {
-                    showError('Invalid npub format');
-                    return;
-                }
-            } else if (!/^[a-f0-9]{64}$/i.test(pubkey)) {
-                showError('Invalid hex format (should be 64 hex characters)');
-                return;
-            }
-
-            pubkey = pubkey.toLowerCase();
-            closeAllWebSockets();
+            isSearching = true;
             showLoading();
-            clearTimeout(searchTimeout);
-
-            // Timeout after 8 seconds
-            searchTimeout = setTimeout(() => {
-                if (document.getElementById('loading').classList.contains('show')) {
-                    hideLoading();
-                    showError('No profile found. Try another pubkey or check your connection.');
-                    closeAllWebSockets();
-                }
-            }, 8000);
-
-            fetchProfileFromRelays(pubkey);
+            fetchProfile(pubkey);
         }
 
-        function fetchProfileFromRelays(pubkey) {
-            let foundProfile = false;
+        function fetchProfile(pubkey) {
+            let attempts = 0;
+            let maxAttempts = RELAYS.length;
 
-            RELAYS.forEach(relayUrl => {
+            function tryNextRelay() {
+                if (attempts >= maxAttempts) {
+                    hideLoading();
+                    showError('Could not fetch profile. Please try again.');
+                    isSearching = false;
+                    return;
+                }
+
+                const relay = RELAYS[attempts];
+                attempts++;
+
+                console.log(`Attempting relay ${attempts}/${maxAttempts}: ${relay}`);
+
+                fetchFromRelay(relay, pubkey)
+                    .then(profile => {
+                        if (profile) {
+                            hideLoading();
+                            displayProfile(pubkey, profile);
+                            isSearching = false;
+                        } else {
+                            tryNextRelay();
+                        }
+                    })
+                    .catch(error => {
+                        console.error(`Error with relay ${relay}:`, error);
+                        tryNextRelay();
+                    });
+            }
+
+            tryNextRelay();
+        }
+
+        function fetchFromRelay(relayUrl, pubkey) {
+            return new Promise((resolve, reject) => {
+                let ws = null;
+                let timeout = null;
+                let resolved = false;
+
                 try {
-                    const ws = new WebSocket(relayUrl);
-                    const subId = 'profile-' + Math.random().toString(36).substring(7);
+                    ws = new WebSocket(relayUrl);
+
+                    timeout = setTimeout(() => {
+                        if (!resolved) {
+                            resolved = true;
+                            if (ws) {
+                                ws.close();
+                            }
+                            resolve(null);
+                        }
+                    }, 4000);
 
                     ws.onopen = () => {
-                        // Request kind 0 (metadata)
-                        const filter = {
-                            kinds: [0],
-                            authors: [pubkey]
-                        };
-                        ws.send(JSON.stringify(['REQ', subId, filter]));
+                        const sub = ['REQ', 'profile-' + Math.random(), { kinds: [0], authors: [pubkey] }];
+                        try {
+                            ws.send(JSON.stringify(sub));
+                        } catch (e) {
+                            console.error('Error sending request:', e);
+                            resolve(null);
+                        }
                     };
 
                     ws.onmessage = (event) => {
                         try {
                             const message = JSON.parse(event.data);
 
-                            if (message[0] === 'EVENT' && message[2].kind === 0 && !foundProfile) {
-                                foundProfile = true;
-                                clearTimeout(searchTimeout);
-                                hideLoading();
+                            if (message[0] === 'EVENT' && message[2].kind === 0 && !resolved) {
+                                resolved = true;
+                                clearTimeout(timeout);
+                                ws.close();
 
                                 try {
                                     const profile = JSON.parse(message[2].content);
-                                    displayProfile(pubkey, profile);
-                                    closeAllWebSockets();
-                                } catch (parseError) {
-                                    console.error('Error parsing profile content:', parseError);
-                                    displayProfile(pubkey, {});
-                                    closeAllWebSockets();
+                                    resolve(profile);
+                                } catch (e) {
+                                    console.error('Error parsing profile:', e);
+                                    resolve({});
                                 }
                             }
-                        } catch (parseError) {
-                            console.error('Error parsing message:', parseError);
+                        } catch (e) {
+                            console.error('Error parsing message:', e);
                         }
                     };
 
                     ws.onerror = (error) => {
-                        console.error('WebSocket error for relay', relayUrl, error);
+                        console.error('WebSocket error:', error);
+                        if (!resolved) {
+                            resolved = true;
+                            clearTimeout(timeout);
+                            resolve(null);
+                        }
                     };
 
                     ws.onclose = () => {
-                        // Connection closed
+                        if (!resolved) {
+                            resolved = true;
+                            clearTimeout(timeout);
+                            resolve(null);
+                        }
                     };
-
-                    activeWebSockets.push(ws);
                 } catch (e) {
-                    console.error('Error connecting to relay:', relayUrl, e);
+                    console.error('WebSocket creation error:', e);
+                    clearTimeout(timeout);
+                    reject(e);
                 }
             });
         }
 
         function displayProfile(pubkey, profile) {
-            clearTimeout(searchTimeout);
-            hideLoading();
-
-            // Clear input fields and hide search section
+            // Clear inputs
             document.getElementById('hexInput').value = '';
             document.getElementById('npubInput').value = '';
             document.getElementById('searchSection').classList.add('hide');
 
-            const displayName = profile.display_name || profile.name || 'Unknown User';
+            const displayName = profile.display_name || profile.name || 'Anonymous';
             const username = profile.name || pubkey.substring(0, 8);
-            const about = profile.about || 'No bio available';
+            const about = profile.about || '(No bio)';
             const picture = profile.picture;
 
             currentProfile = {
@@ -556,19 +603,12 @@
 
             document.getElementById('displayName').textContent = displayName;
             document.getElementById('username').textContent = '@' + username;
-            document.getElementById('pubkey').textContent = 'pubkey: ' + pubkey;
+            document.getElementById('pubkey').textContent = pubkey;
             document.getElementById('about').textContent = about;
 
             const avatarContainer = document.getElementById('avatarContainer');
             if (picture) {
-                const img = document.createElement('img');
-                img.src = picture;
-                img.alt = 'avatar';
-                img.onerror = function() {
-                    avatarContainer.innerHTML = '👤';
-                };
-                avatarContainer.innerHTML = '';
-                avatarContainer.appendChild(img);
+                avatarContainer.innerHTML = `<img src="${picture}" alt="avatar" onerror="this.innerHTML='👤'">`;
             } else {
                 avatarContainer.innerHTML = '👤';
             }
@@ -581,21 +621,18 @@
         }
 
         function backToSearch() {
-            clearTimeout(searchTimeout);
-            closeAllWebSockets();
+            isSearching = false;
             document.getElementById('profileCard').classList.remove('show');
             document.getElementById('searchSection').classList.remove('hide');
             currentProfile = null;
             hideError();
+            hideLoading();
         }
 
         function copyPubkey() {
             if (currentProfile) {
-                navigator.clipboard.writeText(currentProfile.pubkey).then(() => {
-                    alert('Pubkey copied!');
-                }).catch(() => {
-                    alert('Failed to copy');
-                });
+                navigator.clipboard.writeText(currentProfile.pubkey);
+                alert('Pubkey copied to clipboard!');
             }
         }
 
@@ -603,15 +640,13 @@
             if (currentProfile) {
                 const npub = hexToNpub(currentProfile.pubkey);
                 if (npub) {
-                    navigator.clipboard.writeText(npub).then(() => {
-                        alert('Npub copied!');
-                    }).catch(() => {
-                        alert('Failed to copy');
-                    });
+                    navigator.clipboard.writeText(npub);
+                    alert('Npub copied to clipboard!');
                 }
             }
         }
 
+        // Event listeners
         document.getElementById('hexInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') searchProfile();
         });
