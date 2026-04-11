@@ -324,15 +324,15 @@
 
             <div class="stats">
                 <div class="stat">
-                    <div class="stat-number" id="followers">0</div>
+                    <div class="stat-number" id="followers">-</div>
                     <div class="stat-label">Followers</div>
                 </div>
                 <div class="stat">
-                    <div class="stat-number" id="following">0</div>
+                    <div class="stat-number" id="following">-</div>
                     <div class="stat-label">Following</div>
                 </div>
                 <div class="stat">
-                    <div class="stat-number" id="posts">0</div>
+                    <div class="stat-number" id="posts">-</div>
                     <div class="stat-label">Posts</div>
                 </div>
             </div>
@@ -585,52 +585,8 @@
         }
 
         function fetchStats(pubkey) {
-            // Fetch posts (kind 1)
-            fetchPostCount(pubkey);
-            // Fetch following (kind 3)
             fetchFollowingCount(pubkey);
-            // Fetch followers
-            fetchFollowerCount(pubkey);
-        }
-
-        function fetchPostCount(pubkey) {
-            const relay = RELAYS[0];
-            let ws = null;
-
-            try {
-                ws = new WebSocket(relay);
-
-                const timeout = setTimeout(() => {
-                    if (ws && ws.readyState === WebSocket.OPEN) {
-                        ws.close();
-                    }
-                }, 3000);
-
-                ws.onopen = () => {
-                    const filter = { kinds: [1], authors: [pubkey], limit: 100 };
-                    ws.send(JSON.stringify(['REQ', 'posts', filter]));
-                };
-
-                ws.onmessage = (event) => {
-                    try {
-                        const message = JSON.parse(event.data);
-                        if (message[0] === 'EVENT' && message[2].kind === 1) {
-                            // Count posts
-                            let count = parseInt(document.getElementById('posts').textContent) || 0;
-                            count++;
-                            document.getElementById('posts').textContent = count;
-                        }
-                        if (message[0] === 'EOSE') {
-                            clearTimeout(timeout);
-                            ws.close();
-                        }
-                    } catch (e) {}
-                };
-
-                ws.onerror = () => {
-                    clearTimeout(timeout);
-                };
-            } catch (e) {}
+            fetchPostCount(pubkey);
         }
 
         function fetchFollowingCount(pubkey) {
@@ -644,11 +600,12 @@
                     if (ws && ws.readyState === WebSocket.OPEN) {
                         ws.close();
                     }
+                    document.getElementById('following').textContent = '0';
                 }, 3000);
 
                 ws.onopen = () => {
-                    const filter = { kinds: [3], authors: [pubkey] };
-                    ws.send(JSON.stringify(['REQ', 'following', filter]));
+                    const filter = { kinds: [3], authors: [pubkey], limit: 1 };
+                    ws.send(JSON.stringify(['REQ', 'following-' + pubkey, filter]));
                 };
 
                 ws.onmessage = (event) => {
@@ -666,14 +623,17 @@
 
                 ws.onerror = () => {
                     clearTimeout(timeout);
+                    document.getElementById('following').textContent = '0';
                 };
-            } catch (e) {}
+            } catch (e) {
+                document.getElementById('following').textContent = '0';
+            }
         }
 
-        function fetchFollowerCount(pubkey) {
+        function fetchPostCount(pubkey) {
             const relay = RELAYS[0];
             let ws = null;
-            let followerCount = 0;
+            let postCount = 0;
 
             try {
                 ws = new WebSocket(relay);
@@ -682,28 +642,25 @@
                     if (ws && ws.readyState === WebSocket.OPEN) {
                         ws.close();
                     }
-                    document.getElementById('followers').textContent = followerCount;
+                    document.getElementById('posts').textContent = postCount > 0 ? postCount : '0';
                 }, 3000);
 
                 ws.onopen = () => {
-                    // Find all events that reference this pubkey in their tags
-                    const filter = { kinds: [3], limit: 1000 };
-                    ws.send(JSON.stringify(['REQ', 'followers', filter]));
+                    // Get recent posts, limited to prevent too much data
+                    const filter = { kinds: [1], authors: [pubkey], limit: 100 };
+                    ws.send(JSON.stringify(['REQ', 'posts-' + pubkey, filter]));
                 };
 
+                let eventCount = 0;
                 ws.onmessage = (event) => {
                     try {
                         const message = JSON.parse(event.data);
-                        if (message[0] === 'EVENT' && message[2].kind === 3) {
-                            const tags = message[2].tags || [];
-                            // Check if this event follows the target pubkey
-                            const follows = tags.some(tag => tag[0] === 'p' && tag[1] === pubkey);
-                            if (follows) {
-                                followerCount++;
-                                document.getElementById('followers').textContent = followerCount;
-                            }
+                        if (message[0] === 'EVENT' && message[2].kind === 1) {
+                            eventCount++;
+                            postCount = eventCount;
                         }
                         if (message[0] === 'EOSE') {
+                            document.getElementById('posts').textContent = postCount > 0 ? postCount : '0';
                             clearTimeout(timeout);
                             ws.close();
                         }
@@ -712,8 +669,11 @@
 
                 ws.onerror = () => {
                     clearTimeout(timeout);
+                    document.getElementById('posts').textContent = postCount > 0 ? postCount : '0';
                 };
-            } catch (e) {}
+            } catch (e) {
+                document.getElementById('posts').textContent = '0';
+            }
         }
 
         function displayProfile(pubkey, profile) {
@@ -743,10 +703,10 @@
                 avatarContainer.innerHTML = '👤';
             }
 
-            // Reset stats
-            document.getElementById('followers').textContent = '0';
-            document.getElementById('following').textContent = '0';
-            document.getElementById('posts').textContent = '0';
+            // Reset stats to loading state
+            document.getElementById('followers').textContent = '-';
+            document.getElementById('following').textContent = '-';
+            document.getElementById('posts').textContent = '-';
 
             document.getElementById('profileCard').classList.add('show');
         }
